@@ -1,0 +1,246 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Main</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Home</h3>
+      <ul>
+        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        <li><a href="{{ url_for('profile') }}">Profile</a></li>
+        <li>
+          <a href="{{ url_for('remaining_sessions') }}">Remaining Sessions</a>
+        </li>
+        <li><a href="{{ url_for('sit_in_history') }}">Sit-in History</a></li>
+        <li><a href="{{ url_for('reservation') }}">Reservation</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="header">
+      <h1>Profile</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Profile Information Section -->
+    <div
+      class="profile-info"
+      style="
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        max-width: 700px;
+        margin: 0 auto;
+      "
+    >
+      <!-- Edit Profile Button (positioned at top-right) -->
+      <a class="editBtn" href="{{ url_for('edit_profile') }}">
+        <div class="text">Edit</div>
+        <div class="sign">
+          <i class="fa fa-pencil" aria-hidden="true"></i>
+        </div>
+      </a>
+
+      <!-- Centered Circular Profile Image -->
+      <!-- Profile Image -->
+      <div style="text-align: center; margin-bottom: 20px">
+        {% if student.image_path %}
+        <img
+          src="{{ url_for('static', filename=student.image_path) }}"
+          alt="Profile"
+          style="
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+          "
+        />
+        {% else %}
+        <!-- Default image if no image_path -->
+        <img
+          src="{{ url_for('static', filename='images/profile.png') }}"
+          alt="Profile"
+          style="
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+          "
+        />
+        {% endif %}
+      </div>
+
+      <!-- Student Details Table -->
+      <table
+        class="profile-table"
+        style="width: 100%; border-collapse: collapse"
+      >
+        <tr>
+          <th
+            style="
+              text-align: left;
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            IDNO:
+          </th>
+          <td
+            style="
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            {{ student.idno }}
+          </td>
+        </tr>
+        <tr>
+          <th
+            style="
+              text-align: left;
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            Last Name:
+          </th>
+          <td
+            style="
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            {{ student.lastname }}
+          </td>
+        </tr>
+        <tr>
+          <th
+            style="
+              text-align: left;
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            First Name:
+          </th>
+          <td
+            style="
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            {{ student.firstname }}
+          </td>
+        </tr>
+        <tr>
+          <th
+            style="
+              text-align: left;
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            Middle Name:
+          </th>
+          <td
+            style="
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            {{ student.midname }}
+          </td>
+        </tr>
+        <tr>
+          <th
+            style="
+              text-align: left;
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            Course:
+          </th>
+          <td
+            style="
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            {{ student.course }}
+          </td>
+        </tr>
+        <tr>
+          <th
+            style="
+              text-align: left;
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            Year Level:
+          </th>
+          <td
+            style="
+              padding: 8px;
+              border-bottom: 1px solid #ddd;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            {{ student.year_level }}
+          </td>
+        </tr>
+        <tr>
+          <th
+            style="
+              text-align: left;
+              padding: 8px;
+              padding-top: 20px;
+              padding-bottom: 20px;
+            "
+          >
+            Email Address:
+          </th>
+          <td style="padding: 8px; padding-top: 20px; padding-bottom: 20px">
+            {{ student.email_address }}
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

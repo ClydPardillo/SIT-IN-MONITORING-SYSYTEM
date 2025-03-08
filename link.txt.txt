@@ -1,0 +1,172 @@
+https://themewagon.github.io/spike-nuxtjs-free/
+
+
+
+
+-- Users table (authentication and access control)
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL, -- Used as username for login
+    password TEXT NOT NULL, -- Should store hashed passwords, not plaintext
+    role TEXT NOT NULL CHECK (role IN ('admin', 'student', 'staff')),
+    is_active BOOLEAN DEFAULT 1
+);
+
+-- Students table (detailed student information)
+CREATE TABLE students (
+    idno TEXT PRIMARY KEY, -- Used as username for login
+    lastname TEXT NOT NULL,
+    firstname TEXT NOT NULL,
+    midname TEXT,
+    course TEXT NOT NULL,
+    year_level INTEGER,
+    email_address TEXT UNIQUE NOT NULL,
+    image_path TEXT
+);
+
+-- Laboratories table (information about lab rooms)
+CREATE TABLE laboratories (
+    lab_id INTEGER PRIMARY KEY,
+    room_number TEXT NOT NULL UNIQUE,
+    building TEXT,
+    capacity INTEGER NOT NULL,
+    description TEXT,
+    equipment TEXT,
+    status TEXT DEFAULT 'Available' CHECK (status IN ('Available', 'Maintenance', 'Reserved', 'Closed')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Lab schedules (regular availability patterns)
+CREATE TABLE lab_schedules (
+    schedule_id INTEGER PRIMARY KEY,
+    lab_id INTEGER NOT NULL,
+    day_of_week TEXT NOT NULL CHECK (day_of_week IN ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')),
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    is_available BOOLEAN DEFAULT 1,
+    reserved_for TEXT,
+    FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+    UNIQUE(lab_id, day_of_week, start_time)
+);
+
+-- Lab reservations (requests to use labs)
+CREATE TABLE lab_reservations (
+    reservation_id INTEGER PRIMARY KEY,
+    student_id TEXT NOT NULL,
+    lab_id INTEGER NOT NULL,
+    reservation_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    purpose TEXT NOT NULL,
+    status TEXT DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    approved_by INTEGER,
+    approval_date TIMESTAMP,
+    rejection_reason TEXT,
+    FOREIGN KEY (student_id) REFERENCES students(idno),
+    FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+    FOREIGN KEY (approved_by) REFERENCES users(id)
+);
+
+-- Lab sessions (actual lab usage tracking)
+CREATE TABLE lab_sessions (
+    session_id INTEGER PRIMARY KEY,
+    student_id TEXT NOT NULL,
+    lab_id INTEGER NOT NULL,
+    reservation_id INTEGER,
+    check_in_time TIMESTAMP NOT NULL,
+    check_out_time TIMESTAMP,
+    duration_hours REAL,
+    status TEXT DEFAULT 'Active' CHECK (status IN ('Active', 'Completed', 'Terminated')),
+    notes TEXT,
+    created_by INTEGER NOT NULL,
+    FOREIGN KEY (student_id) REFERENCES students(idno),
+    FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+    FOREIGN KEY (reservation_id) REFERENCES lab_reservations(reservation_id),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Session feedback
+CREATE TABLE session_feedback (
+    feedback_id INTEGER PRIMARY KEY,
+    session_id INTEGER NOT NULL,
+    student_id TEXT NOT NULL,
+    rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+    comments TEXT,
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES lab_sessions(session_id),
+    FOREIGN KEY (student_id) REFERENCES students(idno),
+    UNIQUE(session_id, student_id)
+);
+
+-- Session log (detailed activity tracking)
+CREATE TABLE session_logs (
+    log_id INTEGER PRIMARY KEY,
+    session_id INTEGER NOT NULL,
+    action_type TEXT NOT NULL CHECK (action_type IN ('Check-in', 'Check-out', 'Extension', 'Reset', 'Warning')),
+    action_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    performed_by INTEGER NOT NULL,
+    details TEXT,
+    FOREIGN KEY (session_id) REFERENCES lab_sessions(session_id),
+    FOREIGN KEY (performed_by) REFERENCES users(id)
+);
+
+-- Lab rules
+CREATE TABLE lab_rules (
+    rule_id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    rule_type TEXT NOT NULL CHECK (rule_type IN ('general', 'lab-specific')),
+    lab_id INTEGER,
+    is_active BOOLEAN DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER NOT NULL,
+    FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Announcements
+CREATE TABLE announcements (
+    announcement_id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    posted_by INTEGER NOT NULL,
+    posted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expiry_date TIMESTAMP,
+    is_active BOOLEAN DEFAULT 1,
+    FOREIGN KEY (posted_by) REFERENCES users(id)
+);
+
+-- Session statistics (for quick reporting)
+CREATE TABLE session_statistics (
+    stat_id INTEGER PRIMARY KEY,
+    reference_date DATE NOT NULL,
+    lab_id INTEGER NOT NULL,
+    total_sessions INTEGER DEFAULT 0,
+    total_duration_hours REAL DEFAULT 0,
+    unique_students INTEGER DEFAULT 0,
+    average_session_length REAL DEFAULT 0,
+    peak_hour TIME,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+    UNIQUE(reference_date, lab_id)
+);
+
+-- Create necessary indexes
+CREATE INDEX idx_lab_sessions_student ON lab_sessions(student_id);
+CREATE INDEX idx_lab_sessions_date ON lab_sessions(date(check_in_time));
+CREATE INDEX idx_lab_reservations_date ON lab_reservations(reservation_date);
+CREATE INDEX idx_lab_reservations_status ON lab_reservations(status);
+CREATE INDEX idx_students_course ON students(course);
+CREATE INDEX idx_students_name ON students(lastname, firstname);
+
+
+
+
+
+
+
+
+

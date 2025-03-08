@@ -1,0 +1,217 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Main</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Home</h3>
+      <ul>
+        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        <li><a href="{{ url_for('profile') }}">Profile</a></li>
+        <li>
+          <a href="{{ url_for('remaining_sessions') }}">Remaining Sessions</a>
+        </li>
+        <li><a href="{{ url_for('sit_in_history') }}">Sit-in History</a></li>
+        <li><a href="{{ url_for('reservation') }}">Reservation</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Dashboard</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Stats / Usage Overview -->
+    <div class="stats-row">
+      <!-- Remaining Lab Sessions Card -->
+      <div class="stats-card">
+        <h4>Remaining Lab Sessions</h4>
+        <div class="stats-content">
+          <h2>{{ remaining_sessions }}</h2>
+          <span class="positive">This Semester</span>
+        </div>
+      </div>
+
+      <!-- Upcoming Reservation Card -->
+      <div class="stats-card">
+        <h4>
+          <i
+            class="fa fa-calendar"
+            aria-hidden="true"
+            style="margin-right: 5px"
+          ></i>
+          Upcoming Reservation
+        </h4>
+        <div class="stats-content" style="margin-top: 15px">
+          {% if reservation %}
+          <p>
+            Your reservation is scheduled on:
+            <strong>{{ reservation.lab_date }}</strong> from
+            <strong>{{ reservation.start_time|format_time }}</strong> to
+            <strong>{{ reservation.end_time|format_time }}</strong>.
+          </p>
+          {% else %}
+          <p>No reservations scheduled</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Announcements Section -->
+    {% if announcements %}
+    <div class="content-row">
+      <div class="schedule-card">
+        <h4>
+          <i
+            class="fa fa-bullhorn"
+            aria-hidden="true"
+            style="margin-right: 5px"
+          ></i>
+          Announcements
+        </h4>
+        <div class="announcements-container">
+          {% for announcement in announcements %}
+          <div class="announcement-item">
+            <h5>{{ announcement.title }}</h5>
+            <p>{{ announcement.content }}</p>
+            <small class="text-muted"
+              >Posted on: {{ announcement.posted_date|format_date|first }} at {{
+              announcement.posted_date|format_date|last }}</small
+            >
+            {% if announcement.expiry_date %}
+            <small class="text-muted">
+              | Expires on: {{ announcement.expiry_date|format_date|first }} at
+              {{ announcement.expiry_date|format_date|last }}</small
+            >
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Rules and Regulations Container (Independent) -->
+    <div class="content-row" style="margin-top: 20px">
+      <div class="clients-card">
+        <h4>
+          <i
+            class="fa fa-gavel"
+            aria-hidden="true"
+            style="margin-right: 5px"
+          ></i>
+          Laboratory Rules and Regulations
+        </h4>
+        <div class="client-item">
+          <div class="client-info">
+            <br />
+            <h4 style="text-align: center">
+              University of Cebu <br />
+              COLLEGE OF INFORMATION & COMPUTER STUDIES
+            </h4>
+            <br />
+            <span>
+              To avoid embarrassment and maintain camaraderie with your friends
+              and superiors at our laboratories, please observe the
+              following:<br /><br />
+              1. 🔇
+              <strong
+                >Maintain silence, proper decorum, and discipline inside the
+                laboratory.</strong
+              >
+              Mobile phones, walkmans, and other personal pieces of equipment
+              must be switched off.<br /><br />
+              2. 🎮🚫
+              <strong>Games are not allowed inside the lab.</strong> This
+              includes computer-related games, card games, and other games that
+              may disturb the operation of the lab.<br /><br />
+              3. 🌐🔒
+              <strong
+                >Surfing the Internet is allowed only with the permission of the
+                instructor.</strong
+              >
+              Downloading and installing of software are strictly prohibited.<br /><br />
+              4. 🚫🔞
+              <strong
+                >Getting access to other websites not related to the
+                course</strong
+              >
+              (especially pornographic and illicit sites) is strictly
+              prohibited.<br /><br />
+              5. 📁❌
+              <strong
+                >Deleting computer files and changing the set-up of the computer
+                is a major offense.</strong
+              ><br /><br />
+              6. ⏱️ <strong>Observe computer time usage carefully.</strong> A
+              fifteen-minute allowance is given for each use. Otherwise, the
+              unit will be given to those who wish to "sit-in."<br /><br />
+              7. 👥✅
+              <strong
+                >Observe proper decorum while inside the laboratory.</strong
+              ><br />
+              - 🚪⛔ Do not get inside the lab unless the instructor is
+              present.<br />
+              - 🎒📦 All bags, knapsacks, and the likes must be deposited at the
+              counter.<br />
+              - 💺🔀 Follow the seating arrangement of your instructor.<br />
+              - 🖥️❌ At the end of class, all software programs must be
+              closed.<br />
+              - 💺🔄 Return all chairs to their proper places after using.<br /><br />
+              8. 🚫🍔
+              <strong
+                >Chewing gum, eating, drinking, smoking, and other forms of
+                vandalism are prohibited inside the lab.</strong
+              ><br /><br />
+              9. 👮♂️🚪
+              <strong
+                >Anyone causing a continual disturbance will be asked to leave
+                the lab.</strong
+              >
+              Acts or gestures offensive to the members of the community,
+              including public display of physical intimacy, are not
+              tolerated.<br /><br />
+              10. 😡⚠️
+              <strong
+                >Persons exhibiting hostile or threatening behavior</strong
+              >
+              such as yelling, swearing, or disregarding requests made by lab
+              personnel will be asked to leave the lab.<br /><br />
+              11. 📞🚔
+              <strong
+                >For serious offenses, the lab personnel may call the Civil
+                Security Office (CSU) for assistance.</strong
+              ><br /><br />
+              12. 🛠️❗
+              <strong
+                >Any technical problem or difficulty must be addressed to the
+                laboratory supervisor, student assistant, or instructor
+                immediately.</strong
+              ><br /><br />
+              <strong>🔨 DISCIPLINARY ACTION</strong><br /><br />
+              * ⚠️ <strong>First Offense</strong> – The Head or the Dean or OIC
+              recommends to the Guidance Center for a suspension from classes
+              for each offender.<br /><br />
+              * 🛑⚖️ <strong>Second and Subsequent Offenses</strong> – A
+              recommendation for a heavier sanction will be endorsed to the
+              Guidance Center.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

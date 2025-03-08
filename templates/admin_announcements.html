@@ -1,0 +1,300 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Menu</h3>
+      <ul>
+        <li><a href="{{ url_for('admin_dashboard') }}">Student List</a></li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}">Current Sit-In</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            >View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}" class="active"
+            >Announcements</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}">Generate Reports</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Manage Announcements</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- New Announcement Form -->
+    <div class="content-row" style="margin-bottom: 30px">
+      <div class="schedule-card">
+        <h4>
+          <i class="fa fa-bullhorn" aria-hidden="true"></i> New Announcement
+        </h4>
+        <form method="POST" action="{{ url_for('admin_announcements') }}">
+          <div class="form-group">
+            <label for="title">Title:</label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              class="form-control"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="content">Content:</label>
+            <textarea
+              id="content"
+              name="content"
+              class="form-control"
+              rows="4"
+              required
+            ></textarea>
+          </div>
+          <div class="form-group">
+            <label for="expiry_date">Expiry Date (optional):</label>
+            <input
+              type="datetime-local"
+              id="expiry_date"
+              name="expiry_date"
+              class="form-control"
+            />
+          </div>
+          <div style="text-align: center; margin-top: 20px">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              style="
+                background-color: #4caf50;
+                border: none;
+                border-radius: 5px;
+                padding: 10px 30px;
+                color: white;
+                cursor: pointer;
+                transition: all 0.3s ease;
+              "
+            >
+              Post Announcement
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Announcements List -->
+    <div class="content-row">
+      <div class="schedule-card">
+        <h4><i class="fa fa-list" aria-hidden="true"></i> All Announcements</h4>
+        {% if announcements %}
+        <table style="width: 100%; border-collapse: collapse">
+          <thead>
+            <tr>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">Title</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Content
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Posted Date
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Expiry Date
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Status
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for announcement in announcements %}
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd">
+                {{ announcement.title }}
+              </td>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd">
+                {{ announcement.content }}
+              </td>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd">
+                {{ announcement.posted_date|format_date|first }} at {{
+                announcement.posted_date|format_date|last }}
+              </td>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd">
+                {% if announcement.expiry_date %} {{
+                announcement.expiry_date|format_date|first }} at {{
+                announcement.expiry_date|format_date|last }} {% else %} No
+                expiry {% endif %}
+              </td>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd">
+                {% if announcement.display_status %}
+                <span class="badge badge-success">Active</span>
+                {% else %}
+                <span class="badge badge-secondary">Inactive</span>
+                {% endif %}
+              </td>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd">
+                <a
+                  {%
+                  if
+                  announcement.display_status
+                  %}
+                  href="{{ url_for('toggle_announcement', announcement_id=announcement.announcement_id) }}"
+                  class="btn btn-sm btn-warning"
+                  {%
+                  else
+                  %}
+                  {%
+                  if
+                  announcement.is_expired
+                  %}
+                  href="#"
+                  onclick="openExpiryModal('{{ announcement.announcement_id }}')"
+                  class="btn btn-sm btn-success"
+                  {%
+                  else
+                  %}
+                  href="{{ url_for('toggle_announcement', announcement_id=announcement.announcement_id) }}"
+                  class="btn btn-sm btn-success"
+                  {%
+                  endif
+                  %}
+                  {%
+                  endif
+                  %}
+                  style="text-decoration: none"
+                >
+                  {% if announcement.display_status %}Deactivate{% else
+                  %}Activate{% endif %}
+                </a>
+                <a
+                  href="{{ url_for('delete_announcement', announcement_id=announcement.announcement_id) }}"
+                  class="btn btn-sm btn-danger"
+                  onclick="return confirm('Are you sure you want to delete this announcement?')"
+                  style="text-decoration: none"
+                >
+                  Delete
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p>No announcements found.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Expiry Date Modal -->
+<div
+  id="expiryModal"
+  class="modal"
+  style="
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+  "
+>
+  <div
+    class="modal-content"
+    style="
+      background-color: #fefefe;
+      margin: 15% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 80%;
+      max-width: 500px;
+      border-radius: 5px;
+    "
+  >
+    <div
+      style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      "
+    >
+      <h3 style="margin: 0">Set Expiry Date</h3>
+      <span
+        class="close"
+        onclick="closeExpiryModal()"
+        style="cursor: pointer; font-size: 24px"
+        >&times;</span
+      >
+    </div>
+    <form id="expiryForm" method="POST">
+      <div class="form-group">
+        <label for="expiry_date">New Expiry Date:</label>
+        <input
+          type="datetime-local"
+          id="expiry_date"
+          name="expiry_date"
+          class="form-control"
+          required
+        />
+      </div>
+      <div style="text-align: right; margin-top: 20px">
+        <button
+          type="button"
+          onclick="closeExpiryModal()"
+          class="btn btn-secondary"
+          style="margin-right: 10px"
+        >
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-success">Activate</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openExpiryModal(announcementId) {
+    const modal = document.getElementById("expiryModal");
+    const form = document.getElementById("expiryForm");
+    form.action = `/admin/announcements/toggle/${announcementId}`;
+    modal.style.display = "block";
+  }
+
+  function closeExpiryModal() {
+    const modal = document.getElementById("expiryModal");
+    modal.style.display = "none";
+  }
+
+  // Close modal when clicking outside
+  window.onclick = function (event) {
+    const modal = document.getElementById("expiryModal");
+    if (event.target == modal) {
+      closeExpiryModal();
+    }
+  };
+</script>
+
+{% endblock %}

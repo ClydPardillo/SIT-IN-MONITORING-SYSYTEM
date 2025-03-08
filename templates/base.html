@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Monitoring System</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-store, no-cache, must-revalidate, max-age=0"
+    />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <!-- Favicon -->
+    <link
+      rel="icon"
+      type="image/png"
+      href="{{ url_for('static', filename='images/icons/favicon.ico') }}"
+    />
+
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='fonts/font-awesome-4.7.0/css/font-awesome.min.css') }}"
+    />
+
+    <!-- CSS Files -->
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='css/util.css') }}"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='css/main.css') }}"
+    />
+  </head>
+  <body>
+    <div class="notification-container">
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %} {% for category, message in messages %}
+      <div class="notification alert-{{ category }}">
+        <span class="icon">ℹ️</span>
+        {{ message }}
+      </div>
+      {% endfor %} {% endif %} {% endwith %}
+    </div>
+    {% block content %}{% endblock %}
+
+    <script>
+      setTimeout(() => {
+        document
+          .querySelectorAll(".notification")
+          .forEach((el) => (el.style.display = "none"));
+      }, 4500);
+
+      function previewImage(input) {
+        if (input.files && input.files[0]) {
+          var reader = new FileReader();
+
+          reader.onload = function (e) {
+            // Update the image display
+            document.getElementById("profileImageDisplay").src =
+              e.target.result;
+
+            // Show delete button if it was hidden
+            var deleteBtn = document.getElementById("deleteImageBtn");
+            if (deleteBtn) {
+              deleteBtn.style.display = "flex";
+            } else {
+              // Create delete button if it doesn't exist
+              var imgContainer = document.getElementById(
+                "profileImageDisplay"
+              ).parentNode;
+              var newBtn = document.createElement("button");
+              newBtn.id = "deleteImageBtn";
+              newBtn.type = "button";
+              newBtn.onclick = function () {
+                deleteProfileImage();
+              };
+              newBtn.style.position = "absolute";
+              newBtn.style.bottom = "0";
+              newBtn.style.right = "0";
+              newBtn.style.width = "30px";
+              newBtn.style.height = "30px";
+              newBtn.style.borderRadius = "50%";
+              newBtn.style.backgroundColor = "#f44336";
+              newBtn.style.border = "2px solid white";
+              newBtn.style.cursor = "pointer";
+              newBtn.style.display = "flex";
+              newBtn.style.justifyContent = "center";
+              newBtn.style.alignItems = "center";
+              newBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+
+              var icon = document.createElement("i");
+              icon.className = "fa fa-trash";
+              icon.setAttribute("aria-hidden", "true");
+              icon.style.color = "white";
+              icon.style.fontSize = "12px";
+
+              newBtn.appendChild(icon);
+              imgContainer.appendChild(newBtn);
+
+              // Add the hidden checkbox if it doesn't exist
+              if (!document.getElementById("delete_image")) {
+                var checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.id = "delete_image";
+                checkbox.name = "delete_image";
+                checkbox.value = "yes";
+                checkbox.style.display = "none";
+                imgContainer.appendChild(checkbox);
+              }
+            }
+
+            // Uncheck the delete checkbox since we're adding a new image
+            document.getElementById("delete_image").checked = false;
+          };
+
+          reader.readAsDataURL(input.files[0]);
+        }
+      }
+
+      function deleteProfileImage() {
+        // Set the hidden checkbox to checked
+        document.getElementById("delete_image").checked = true;
+
+        // Change the image to the default profile picture
+        document.getElementById("profileImageDisplay").src =
+          "{{ url_for('static', filename='images/profile.png') }}";
+
+        // Hide the delete button
+        document.getElementById("deleteImageBtn").style.display = "none";
+
+        // Clear the file input
+        document.getElementById("profile_image").value = "";
+      }
+    </script>
+  </body>
+</html>

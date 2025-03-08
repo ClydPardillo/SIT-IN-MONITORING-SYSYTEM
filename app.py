@@ -1,0 +1,1720 @@
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
+import sqlite3
+from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
+import os
+import csv
+from io import StringIO, BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key' 
+
+def get_db_connection():
+    conn = sqlite3.connect("users.db")
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
+def format_time(value):
+    try:
+        # Try parsing as datetime first
+        dt = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+        return dt.strftime('%I:%M %p')
+    except ValueError:
+        try:
+            # If that fails, try parsing as time
+            if ':' in value:
+                if len(value.split(':')) == 2:
+                    dt = datetime.strptime(value, '%H:%M')
+                else:
+                    dt = datetime.strptime(value, '%H:%M:%S')
+                return dt.strftime('%I:%M %p')
+        except ValueError:
+            # If all parsing fails, return the original value
+            return value
+
+def format_date(value):
+    try:
+        # Handle datetime string with timezone info (T)
+        if 'T' in value:
+            dt = datetime.strptime(value, '%Y-%m-%dT%H:%M')
+        else:
+            dt = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+        # Format date and time separately
+        date_str = dt.strftime('%B %d, %Y')
+        time_str = dt.strftime('%I:%M %p')
+        return date_str, time_str
+    except ValueError:
+        return value, value
+
+app.jinja_env.filters['format_time'] = format_time
+app.jinja_env.filters['format_date'] = format_date
+
+
+@app.route('/')
+def home():
+
+    if 'user' in session:
+        flash("Logged in successfully.", "success")
+        return render_template('dashboard.html')
+    else:
+        return render_template('login.html')
+
+@app.route('/login', methods=['POST'])
+def login():
+    email = request.form.get('email')
+    password = request.form.get('pass')
+    conn = get_db_connection()
+    
+    try:
+        user = conn.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, password)).fetchone()
+        
+        if user:
+            if user['role'] == 'admin':
+                session['user'] = 'admin'
+                session['is_admin'] = True
+                flash("Logged in as admin.", "success")
+                return redirect(url_for('admin_dashboard'))
+            else:
+                student = conn.execute("SELECT * FROM students WHERE idno = ?", (email,)).fetchone()
+                if student:
+                    session['user'] = student['idno']
+                session['is_admin'] = False
+                flash("Logged in successfully.", "success")
+                return redirect(url_for('dashboard'))
+        else:
+            flash("Student record not found.", "danger")
+            return redirect(url_for('home'))
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('home'))
+    finally:
+        conn.close()
+
+
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    flash("You have been logged out.", "info")
+    return redirect(url_for('home'))
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user' not in session:
+        flash("Please log in to access the dashboard.", "warning")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    # 1) Retrieve the student's course and other info
+    student = conn.execute("SELECT * FROM students WHERE idno = ?", (session['user'],)).fetchone()
+    if not student:
+        conn.close()
+        flash("Student record not found.", "danger")
+        return redirect(url_for('home'))
+    
+    # 2) Determine max sessions based on course
+    if student['course'] in ("BSIT", "BSCS"):
+        max_sessions = 30
+    else:
+        max_sessions = 15
+
+    # 3) Count completed lab sessions
+    used_sessions = conn.execute("""
+        SELECT COUNT(*) as c 
+        FROM lab_sessions 
+        WHERE student_id = ? AND status = 'Completed'
+    """, (session['user'],)).fetchone()['c']
+    
+    # 4) Calculate remaining sessions
+    remaining_sessions = max_sessions - used_sessions
+    if remaining_sessions < 0:
+        remaining_sessions = 0
+
+    # 5) Get active announcements
+    announcements = conn.execute("""
+        SELECT * FROM announcements 
+        WHERE is_active = 1 
+        AND (expiry_date IS NULL OR expiry_date >= datetime('now'))
+        ORDER BY posted_date DESC
+    """).fetchall()
+
+    # 6) Get the next upcoming reservation
+    upcoming_reservation = conn.execute("""
+        SELECT lr.*, l.room_number, l.building
+        FROM lab_reservations lr
+        JOIN laboratories l ON lr.lab_id = l.lab_id
+        WHERE lr.student_id = ? 
+        AND lr.reservation_date >= date('now')
+        AND lr.status = 'Approved'
+        ORDER BY lr.reservation_date, lr.start_time 
+        LIMIT 1
+    """, (session['user'],)).fetchone()
+    
+    # 7) Get active session if any
+    active_session = conn.execute("""
+        SELECT ls.*, l.room_number, l.building
+        FROM lab_sessions ls
+        JOIN laboratories l ON ls.lab_id = l.lab_id
+        WHERE ls.student_id = ? AND ls.status = 'Active'
+        LIMIT 1
+    """, (session['user'],)).fetchone()
+    
+    conn.close()
+    
+    return render_template(
+        'dashboard.html',
+        student=student,
+        reservation=upcoming_reservation,
+        active_session=active_session,
+        remaining_sessions=remaining_sessions,
+        announcements=announcements
+    )
+
+
+
+@app.route('/profile')
+def profile():
+    if 'user' not in session:
+        flash("Please log in to access your profile.", "warning")
+        return redirect(url_for('home'))
+
+    conn = get_db_connection()
+    student = conn.execute("SELECT * FROM students WHERE idno = ?", (session['user'],)).fetchone()
+    conn.close()
+
+    if not student:
+        flash("Student information not found.", "danger")
+        return redirect(url_for('dashboard'))
+    
+    return render_template('profile.html', student=student)
+
+
+@app.route('/edit_profile', methods=['GET', 'POST'])
+def edit_profile():
+    if 'user' not in session:
+        flash("Please log in to access your profile.", "warning")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    if request.method == 'POST':
+        # Retrieve form data
+        idno = request.form.get('idno')
+        lastname = request.form.get('lastname')
+        firstname = request.form.get('firstname')
+        midname = request.form.get('midname')
+        course = request.form.get('course')
+        year_level = request.form.get('year_level')
+        email_address = request.form.get('email_address')
+        delete_image = request.form.get('delete_image') == 'yes'  # Check if delete checkbox is checked
+
+        # Check for email conflicts
+        existing_email = conn.execute(
+            "SELECT * FROM students WHERE email_address = ? AND idno != ?",
+            (email_address, idno)
+        ).fetchone()
+        if existing_email:
+            flash("Email is already used by another account.", "danger")
+            conn.close()
+            return redirect(url_for('edit_profile'))
+        
+        # Get current student info to access current image path
+        current_student = conn.execute("SELECT image_path FROM students WHERE idno = ?", (idno,)).fetchone()
+        image_path = current_student['image_path']  # Keep current path by default
+        
+        # Handle profile image upload or deletion
+        profile_image = request.files.get('profile_image')
+        
+        if delete_image and image_path:
+            # Delete the physical file if it exists
+            if image_path:
+                file_path = os.path.join('static', image_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            # Set image_path to None in the database
+            image_path = None
+            
+        elif profile_image and profile_image.filename:
+            # Delete old image file if exists
+            if image_path:
+                old_file_path = os.path.join('static', image_path)
+                if os.path.exists(old_file_path):
+                    os.remove(old_file_path)
+                    
+            # Process new image
+            filename = secure_filename(profile_image.filename)
+            upload_folder = os.path.join('static', 'uploads')
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+            save_path = os.path.join(upload_folder, filename)
+            profile_image.save(save_path)
+            image_path = os.path.join('uploads', filename).replace(os.sep, '/')
+
+        # Update student record including image path
+        conn.execute("""
+            UPDATE students
+            SET lastname = ?,
+                firstname = ?,
+                midname = ?,
+                course = ?,
+                year_level = ?,
+                email_address = ?,
+                image_path = ?
+            WHERE idno = ?
+        """, (lastname, firstname, midname, course, year_level, email_address, image_path, idno))
+        
+        conn.commit()
+        conn.close()
+        flash("Profile updated successfully!", "success")
+        return redirect(url_for('profile'))
+    
+    else:
+        # For GET requests, retrieve the current student info
+        student = conn.execute("SELECT * FROM students WHERE idno = ?", (session['user'],)).fetchone()
+        conn.close()
+        if not student:
+            flash("Student information not found.", "danger")
+            return redirect(url_for('dashboard'))
+        return render_template('edit_profile.html', student=student)    
+
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        try:
+            idno = request.form.get('idno')
+            lastname = request.form.get('lastname')
+            firstname = request.form.get('firstname')
+            midname = request.form.get('midname')
+            course = request.form.get('course')
+            year_level = request.form.get('year_level')  # This will now get the text format (e.g., "1st Year")
+            email = request.form.get('email')
+            password = request.form.get('password')
+
+            # Check that all required fields are provided
+            if not all([idno, lastname, firstname, course, year_level, email, password]):
+                flash("Missing required fields", "danger")
+                return redirect(url_for('register'))
+            
+            conn = get_db_connection()
+
+            # Check if the student ID is already registered
+            existing_student = conn.execute("SELECT * FROM students WHERE idno = ?", (idno,)).fetchone()
+            if existing_student:
+                flash("Student ID is already used by another account.", "danger")
+                conn.close()
+                return redirect(url_for('register'))
+
+            # Check if the email is already used
+            existing_email = conn.execute("SELECT * FROM students WHERE email_address = ?", (email,)).fetchone()
+            if existing_email:
+                flash("Email is already used by another account.", "danger")
+                conn.close()
+                return redirect(url_for('register'))
+
+            # Begin transaction
+            conn.execute("BEGIN TRANSACTION")
+            
+            try:
+                # Insert into users table first with idno as email/username
+                conn.execute("""
+                    INSERT INTO users (email, password, role) 
+                    VALUES (?, ?, 'student')
+                """, (idno, password))
+
+                # Then insert into students table with year_level as text
+                conn.execute("""
+                    INSERT INTO students (idno, lastname, firstname, midname, course, year_level, email_address) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (idno, lastname, firstname, midname, course, year_level, email))
+                
+                # Commit the transaction
+                conn.commit()
+                flash("Registration successful! You can now log in.", "success")
+                return redirect(url_for('home'))
+                
+            except sqlite3.Error as e:
+                # Roll back in case of error
+                conn.execute("ROLLBACK")
+                flash(f"Database error: {str(e)}", "danger")
+                return redirect(url_for('register'))
+
+        except Exception as e:
+            flash(f"Error: {str(e)}", "danger")
+            return redirect(url_for('register'))
+        
+        finally:
+            conn.close()
+
+    return render_template('register.html')
+
+
+
+
+@app.route('/remaining_sessions')
+def remaining_sessions():
+    if 'user' not in session:
+        flash("Please log in to view remaining sessions.", "warning")
+        return redirect(url_for('home'))
+
+    conn = get_db_connection()
+
+    # 1) Retrieve the student's course
+    student = conn.execute(
+        "SELECT course FROM students WHERE idno = ?",
+        (session['user'],)
+    ).fetchone()
+
+    if not student:
+        conn.close()
+        flash("Student record not found.", "danger")
+        return redirect(url_for('home'))
+
+    # 2) Determine allocated sessions based on the course
+    if student['course'] in ("BSIT", "BSCS"):
+        allocated_sessions = 30
+    else:
+        allocated_sessions = 15
+
+    # 3) Count how many sessions the student has used
+    used_sessions = conn.execute("""
+        SELECT COUNT(*) as c 
+        FROM lab_sessions 
+        WHERE student_id = ? AND status = 'Completed'
+    """, (session['user'],)).fetchone()['c']
+
+    # 4) Calculate remaining sessions
+    remaining_sessions = allocated_sessions - used_sessions
+    if remaining_sessions < 0:
+        remaining_sessions = 0  # clamp to 0 if they exceed
+
+    # 5) Retrieve an upcoming reservation (if any)
+    reservation = conn.execute("""
+        SELECT lr.*, l.room_number, l.building
+        FROM lab_reservations lr
+        JOIN laboratories l ON lr.lab_id = l.lab_id
+        WHERE lr.student_id = ? 
+        AND lr.reservation_date >= date('now')
+        AND lr.status = 'Approved'
+        ORDER BY lr.reservation_date, lr.start_time 
+        LIMIT 1
+    """, (session['user'],)).fetchone()
+
+    # 6) Retrieve lab session history
+    sessions = conn.execute("""
+        SELECT 
+            ls.*,
+            l.room_number,
+            l.building,
+            ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as duration
+        FROM lab_sessions ls
+        JOIN laboratories l ON ls.lab_id = l.lab_id
+        WHERE ls.student_id = ? AND ls.status = 'Completed'
+        ORDER BY ls.check_in_time DESC
+    """, (session['user'],)).fetchall()
+
+    conn.close()
+
+    return render_template(
+        'remaining_sessions.html',
+        remaining_sessions=remaining_sessions,
+        reservation=reservation,
+        sessions=sessions
+    )
+
+
+
+@app.route('/sit_in_history')
+def sit_in_history():
+    if 'user' not in session:
+        flash("Please log in to view your sit-in history.", "warning")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    # Get all completed lab sessions with location details and feedback status
+    sessions = conn.execute("""
+        SELECT 
+            ls.*,
+            l.room_number,
+            l.building,
+            ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as duration,
+            CASE WHEN sf.feedback_id IS NOT NULL THEN 1 ELSE 0 END as has_feedback
+        FROM lab_sessions ls
+        JOIN laboratories l ON ls.lab_id = l.lab_id
+        LEFT JOIN session_feedback sf ON ls.session_id = sf.session_id AND sf.student_id = ls.student_id
+        WHERE ls.student_id = ? AND ls.status = 'Completed'
+        ORDER BY ls.check_in_time DESC
+    """, (session['user'],)).fetchall()
+    
+    conn.close()
+    
+    return render_template('sit_in_history.html', sessions=sessions)
+
+
+
+
+@app.route('/reservation', methods=['GET', 'POST'])
+def reservation():
+    if 'user' not in session:
+        flash("Please log in to make a reservation.", "warning")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    if request.method == 'POST':
+        lab_id = request.form.get('lab_id')
+        reservation_date = request.form.get('reservation_date')
+        start_time = request.form.get('start_time')
+        end_time = request.form.get('end_time')
+        student_id = session['user']
+        
+        try:
+            # Check if end time is after start time
+            start = datetime.strptime(start_time, '%H:%M')
+            end = datetime.strptime(end_time, '%H:%M')
+            if end <= start:
+                flash("End time must be after start time.", "danger")
+                return redirect(url_for('reservation'))
+            
+            # Check for overlapping reservations
+            overlapping = conn.execute("""
+                SELECT * FROM lab_reservations 
+                WHERE lab_id = ? 
+                AND reservation_date = ? 
+                AND status = 'Approved'
+                AND (
+                    (start_time <= ? AND end_time > ?) OR
+                    (start_time < ? AND end_time >= ?) OR
+                    (start_time >= ? AND end_time <= ?)
+                )
+            """, (lab_id, reservation_date, start_time, start_time, 
+                  end_time, end_time, start_time, end_time)).fetchone()
+            
+            if overlapping:
+                flash("This time slot is already reserved.", "danger")
+                return redirect(url_for('reservation'))
+            
+            # Create the reservation
+            conn.execute("""
+                INSERT INTO lab_reservations (student_id, lab_id, reservation_date, start_time, end_time, status)
+                VALUES (?, ?, ?, ?, ?, 'Pending')
+            """, (student_id, lab_id, reservation_date, start_time, end_time))
+            conn.commit()
+            flash("Reservation submitted successfully!", "success")
+            
+        except ValueError:
+            flash("Invalid time format.", "danger")
+        except sqlite3.Error as e:
+            flash(f"Database error: {str(e)}", "danger")
+        
+        return redirect(url_for('reservation'))
+    
+    # For GET request, retrieve available labs and upcoming reservations
+    try:
+        # Get all labs
+        labs = conn.execute("SELECT * FROM laboratories ORDER BY building, room_number").fetchall()
+        
+        # Get upcoming reservations for the student
+        reservations = conn.execute("""
+            SELECT lr.*, l.building, l.room_number, 
+                   CASE 
+                       WHEN lr.status = 'Approved' THEN 'badge-success'
+                       WHEN lr.status = 'Pending' THEN 'badge-warning'
+                       ELSE 'badge-danger'
+                   END as status_badge
+            FROM lab_reservations lr
+            JOIN laboratories l ON lr.lab_id = l.lab_id
+            WHERE lr.student_id = ? 
+            AND (lr.status = 'Pending' OR 
+                 (lr.status = 'Approved' AND lr.reservation_date >= date('now')))
+            ORDER BY lr.reservation_date ASC, lr.start_time ASC
+        """, (session['user'],)).fetchall()
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        labs = []
+        reservations = []
+    
+    conn.close()
+    return render_template('reservation.html', 
+                         labs=labs, 
+                         reservations=reservations,
+                         now=datetime.now().strftime('%Y-%m-%d'))
+
+@app.route('/admin')
+def admin_dashboard():
+    # Check if user is logged in
+    if 'user' not in session:
+        flash("Please log in to access the admin panel.", "warning")
+        return redirect(url_for('home'))
+    
+    # Check if user is admin
+    if not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Get database connection
+        conn = get_db_connection()
+        
+        # Get student statistics
+        total_students = conn.execute("SELECT COUNT(*) as count FROM students").fetchone()['count']
+        active_sessions = conn.execute("SELECT COUNT(*) as count FROM lab_sessions WHERE status = 'Active'").fetchone()['count']
+        total_sit_ins = conn.execute("SELECT COUNT(*) as count FROM lab_sessions WHERE status = 'Completed'").fetchone()['count']
+        
+        # Fetch all students with their details
+        students = conn.execute("""
+            SELECT idno, lastname, firstname, midname, course, year_level, email_address 
+            FROM students 
+            ORDER BY lastname, firstname
+        """).fetchall()
+        
+        # Fetch all available laboratories
+        labs = conn.execute("""
+            SELECT lab_id, room_number, building 
+            FROM laboratories 
+            WHERE status = 'Available'
+            ORDER BY building, room_number
+        """).fetchall()
+        
+        # Close the connection
+        conn.close()
+        
+        # Render admin template with student and lab data
+        return render_template('admin.html', 
+                             students=students, 
+                             labs=labs,
+                             total_students=total_students,
+                             active_sessions=active_sessions,
+                             total_sit_ins=total_sit_ins)
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('home'))
+
+@app.route('/admin/announcements', methods=['GET', 'POST'])
+def admin_announcements():
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        expiry_date = request.form.get('expiry_date')
+        
+        try:
+            # Get current time in Philippines timezone
+            current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            conn.execute("""
+                INSERT INTO announcements (title, content, posted_by, posted_date, expiry_date, is_active)
+                VALUES (?, ?, ?, ?, ?, 1)
+            """, (title, content, 1, current_time, expiry_date))  # Using 1 as admin's user ID
+            conn.commit()
+            flash("Announcement posted successfully!", "success")
+        except sqlite3.Error as e:
+            flash(f"Error posting announcement: {str(e)}", "danger")
+        
+        return redirect(url_for('admin_announcements'))
+    
+    try:
+        # First, update expired announcements to inactive
+        conn.execute("""
+            UPDATE announcements 
+            SET is_active = 0 
+            WHERE expiry_date IS NOT NULL 
+            AND expiry_date < datetime('now')
+            AND is_active = 1
+        """)
+        conn.commit()
+        
+        # Then fetch all announcements for admin view
+        announcements = conn.execute("""
+            SELECT *,
+                CASE 
+                    WHEN expiry_date IS NOT NULL AND expiry_date < datetime('now') THEN 0
+                    ELSE is_active 
+                END as display_status,
+                CASE
+                    WHEN expiry_date IS NOT NULL AND expiry_date < datetime('now') THEN 1
+                    ELSE 0
+                END as is_expired
+            FROM announcements 
+            ORDER BY posted_date DESC
+        """).fetchall()
+        
+        return render_template('admin_announcements.html', announcements=announcements)
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_dashboard'))
+    finally:
+        conn.close()
+
+@app.route('/admin/announcements/toggle/<int:announcement_id>', methods=['GET', 'POST'])
+def toggle_announcement(announcement_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get current announcement status
+        current = conn.execute(
+            "SELECT is_active FROM announcements WHERE announcement_id = ?", 
+            (announcement_id,)
+        ).fetchone()
+        
+        if request.method == 'POST' and not current['is_active']:
+            # Activating with new expiry date
+            expiry_date = request.form.get('expiry_date')
+            conn.execute("""
+                UPDATE announcements 
+                SET is_active = 1, expiry_date = ?
+                WHERE announcement_id = ?
+            """, (expiry_date, announcement_id))
+        else:
+            # Simple toggle (deactivation)
+            conn.execute("""
+                UPDATE announcements 
+                SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END 
+                WHERE announcement_id = ?
+            """, (announcement_id,))
+        
+        conn.commit()
+        flash("Announcement status updated successfully!", "success")
+    except sqlite3.Error as e:
+        flash(f"Error updating announcement: {str(e)}", "danger")
+    finally:
+        conn.close()
+    
+    return redirect(url_for('admin_announcements'))
+
+@app.route('/admin/announcements/delete/<int:announcement_id>')
+def delete_announcement(announcement_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM announcements WHERE announcement_id = ?", (announcement_id,))
+        conn.commit()
+        flash("Announcement deleted successfully!", "success")
+    except sqlite3.Error as e:
+        flash(f"Error deleting announcement: {str(e)}", "danger")
+    finally:
+        conn.close()
+    
+    return redirect(url_for('admin_announcements'))
+
+@app.route('/api/student_sessions/<student_id>')
+def get_student_sessions(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    conn = get_db_connection()
+    try:
+        # Get student's course
+        student = conn.execute("SELECT course FROM students WHERE idno = ?", (student_id,)).fetchone()
+        if not student:
+            return jsonify({'error': 'Student not found'}), 404
+
+        # Calculate max sessions based on course
+        max_sessions = 30 if student['course'] in ("BSIT", "BSCS") else 15
+
+        # Count used sessions
+        used_sessions = conn.execute("""
+            SELECT COUNT(*) as count 
+            FROM lab_sessions 
+            WHERE student_id = ? AND status = 'Completed'
+        """, (student_id,)).fetchone()['count']
+
+        # Calculate remaining sessions
+        remaining_sessions = max(0, max_sessions - used_sessions)
+
+        return jsonify({
+            'remaining_sessions': remaining_sessions
+        })
+
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/start_session', methods=['POST'])
+def start_session():
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.get_json()
+    student_id = data.get('student_id')
+    lab_id = data.get('lab_id')
+    purpose = data.get('purpose')
+
+    if not all([student_id, lab_id, purpose]):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    conn = get_db_connection()
+    try:
+        # Check if student has any active sessions
+        active_session = conn.execute("""
+            SELECT * FROM lab_sessions 
+            WHERE student_id = ? AND status = 'Active'
+        """, (student_id,)).fetchone()
+
+        if active_session:
+            return jsonify({
+                'success': False,
+                'message': 'Student already has an active session'
+            }), 400
+
+        # Check if student has remaining sessions
+        student = conn.execute("SELECT course FROM students WHERE idno = ?", (student_id,)).fetchone()
+        max_sessions = 30 if student['course'] in ("BSIT", "BSCS") else 15
+        used_sessions = conn.execute("""
+            SELECT COUNT(*) as count 
+            FROM lab_sessions 
+            WHERE student_id = ? AND status = 'Completed'
+        """, (student_id,)).fetchone()['count']
+
+        if used_sessions >= max_sessions:
+            return jsonify({
+                'success': False,
+                'message': 'No remaining sessions available'
+            }), 400
+
+        # Get current time in Philippines timezone
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # Start new session with current time
+        conn.execute("""
+            INSERT INTO lab_sessions (
+                student_id, lab_id, check_in_time, status, notes, created_by
+            ) VALUES (?, ?, ?, 'Active', ?, ?)
+        """, (student_id, lab_id, current_time, purpose, session['user']))
+        
+        conn.commit()
+        return jsonify({'success': True})
+
+    except sqlite3.Error as e:
+        return jsonify({
+            'success': False,
+            'message': f"Database error: {str(e)}"
+        }), 500
+    finally:
+        conn.close()
+
+@app.route('/admin/current-sit-in')
+def admin_current_sit_in():
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Fetch all active sessions with student details
+        active_sessions = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                s.course,
+                s.year_level,
+                ls.check_in_time,
+                ls.notes as purpose,
+                l.room_number,
+                l.building
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.status = 'Active'
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        conn.close()
+        
+        return render_template('admin_current_sit_in.html', active_sessions=active_sessions)
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/current-sit-in/logout/<student_id>')
+def logout_session(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get current time in Philippines timezone
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        conn.execute("""
+            UPDATE lab_sessions 
+            SET status = 'Completed',
+                check_out_time = ?
+            WHERE student_id = ? AND status = 'Active'
+        """, (current_time, student_id))
+        conn.commit()
+        flash("Student logged out successfully!", "success")
+    except sqlite3.Error as e:
+        flash(f"Error logging out student: {str(e)}", "danger")
+    finally:
+        conn.close()
+    
+    return redirect(url_for('admin_current_sit_in'))
+
+@app.route('/admin/sit-in-records')
+def admin_sit_in_records():
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get purpose/language statistics
+        purpose_stats = conn.execute("""
+            SELECT 
+                notes as purpose,
+                COUNT(*) as count
+            FROM lab_sessions
+            WHERE status = 'Completed'
+            GROUP BY notes
+            ORDER BY count DESC
+        """).fetchall()
+        
+        # Get laboratory usage statistics
+        lab_stats = conn.execute("""
+            SELECT 
+                l.building,
+                l.room_number,
+                COUNT(*) as count
+            FROM lab_sessions ls
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.status = 'Completed'
+            GROUP BY l.building, l.room_number
+            ORDER BY count DESC
+        """).fetchall()
+        
+        # Get total completed sessions
+        total_sessions = conn.execute("""
+            SELECT COUNT(*) as total
+            FROM lab_sessions
+            WHERE status = 'Completed'
+        """).fetchone()['total']
+        
+        # Fetch all completed sessions with student details
+        completed_sessions = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                s.course,
+                DATE(ls.check_in_time) as date,
+                ls.check_in_time,
+                ls.check_out_time,
+                ls.notes as purpose,
+                l.room_number,
+                l.building,
+                ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as duration
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.status = 'Completed'
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        conn.close()
+        
+        return render_template('admin_sit_in_records.html', 
+                             completed_sessions=completed_sessions,
+                             purpose_stats=purpose_stats,
+                             lab_stats=lab_stats,
+                             total_sessions=total_sessions)
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/reports')
+def admin_reports():
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get all students for the dropdown
+        students = conn.execute("""
+            SELECT idno, lastname, firstname, midname, course, year_level, email_address
+            FROM students
+            ORDER BY lastname, firstname
+        """).fetchall()
+        
+        # Get selected student's data if student_id is provided
+        selected_student = None
+        student_sessions = []
+        student_feedback = []
+        
+        student_id = request.args.get('student_id')
+        if student_id:
+            # Get student details
+            selected_student = conn.execute("""
+                SELECT idno, lastname, firstname, midname, course, year_level, email_address
+                FROM students
+                WHERE idno = ?
+            """, (student_id,)).fetchone()
+            
+            # Get student's sit-in sessions
+            student_sessions = conn.execute("""
+                SELECT 
+                    s.idno,
+                    s.lastname,
+                    s.firstname,
+                    s.midname,
+                    ls.notes as purpose,
+                    l.room_number,
+                    l.building,
+                    ls.check_in_time,
+                    ls.check_out_time,
+                    DATE(ls.check_in_time) as date,
+                    ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as duration
+                FROM lab_sessions ls
+                JOIN students s ON ls.student_id = s.idno
+                JOIN laboratories l ON ls.lab_id = l.lab_id
+                WHERE ls.student_id = ? AND ls.status = 'Completed'
+                ORDER BY ls.check_in_time DESC
+            """, (student_id,)).fetchall()
+            
+            # Get student's feedback
+            student_feedback = conn.execute("""
+                SELECT 
+                    s.idno,
+                    s.lastname,
+                    s.firstname,
+                    s.midname,
+                    l.room_number,
+                    l.building,
+                    DATE(ls.check_in_time) as date,
+                    sf.rating,
+                    sf.comments
+                FROM session_feedback sf
+                JOIN lab_sessions ls ON sf.session_id = ls.session_id
+                JOIN students s ON sf.student_id = s.idno
+                JOIN laboratories l ON ls.lab_id = l.lab_id
+                WHERE sf.student_id = ?
+                ORDER BY ls.check_in_time DESC
+            """, (student_id,)).fetchall()
+        
+        return render_template(
+            "admin_reports.html",
+            students=students,
+            selected_student=selected_student,
+            student_sessions=student_sessions,
+            student_feedback=student_feedback
+        )
+    finally:
+        conn.close()
+
+@app.route('/submit_feedback/<int:session_id>', methods=['GET', 'POST'])
+def submit_feedback(session_id):
+    if 'user' not in session:
+        flash("Please log in to submit feedback.", "warning")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Check if the session exists and belongs to the student
+        session_data = conn.execute("""
+            SELECT 
+                ls.*, 
+                l.room_number, 
+                l.building,
+                ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as duration
+            FROM lab_sessions ls
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.session_id = ? AND ls.student_id = ? AND ls.status = 'Completed'
+        """, (session_id, session['user'])).fetchone()
+        
+        if not session_data:
+            flash("Session not found or you don't have permission to submit feedback.", "danger")
+            return redirect(url_for('sit_in_history'))
+        
+        # Check if feedback already exists
+        existing_feedback = conn.execute("""
+            SELECT * FROM session_feedback 
+            WHERE session_id = ? AND student_id = ?
+        """, (session_id, session['user'])).fetchone()
+        
+        if existing_feedback:
+            flash("You have already submitted feedback for this session.", "warning")
+            return redirect(url_for('sit_in_history'))
+        
+        if request.method == 'POST':
+            rating = request.form.get('rating')
+            comments = request.form.get('comments')
+            
+            if not rating:
+                flash("Please provide a rating.", "danger")
+                return redirect(url_for('submit_feedback', session_id=session_id))
+            
+            # Insert the feedback
+            conn.execute("""
+                INSERT INTO session_feedback (session_id, student_id, rating, comments)
+                VALUES (?, ?, ?, ?)
+            """, (session_id, session['user'], rating, comments))
+            conn.commit()
+            
+            flash("Thank you for your feedback!", "success")
+            return redirect(url_for('sit_in_history'))
+        
+        return render_template('submit_feedback.html', session=session_data)
+        
+    finally:
+        conn.close()
+
+@app.route('/admin/reports/export/sessions/<student_id>')
+def export_sessions_csv(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get student info for filename
+        student = conn.execute("""
+            SELECT lastname, firstname 
+            FROM students 
+            WHERE idno = ?
+        """, (student_id,)).fetchone()
+        
+        if not student:
+            flash("Student not found.", "danger")
+            return redirect(url_for('admin_reports'))
+        
+        # Get student's sit-in sessions
+        sessions = conn.execute("""
+            SELECT 
+                s.idno as "ID Number",
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
+                ls.notes as "Purpose",
+                l.room_number || ' - ' || l.building as "Laboratory Room",
+                ls.check_in_time as "Check-in Time",
+                ls.check_out_time as "Check-out Time",
+                DATE(ls.check_in_time) as "Date",
+                ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as "Duration (Hours)"
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.student_id = ? AND ls.status = 'Completed'
+            ORDER BY ls.check_in_time DESC
+        """, (student_id,)).fetchall()
+        
+        # Create CSV in memory
+        si = StringIO()
+        writer = csv.writer(si)
+        
+        # Write headers
+        headers = [
+            "ID Number",
+            "Name",
+            "Purpose",
+            "Laboratory Room",
+            "Check-in Time",
+            "Check-out Time",
+            "Date",
+            "Duration (Hours)"
+        ]
+        writer.writerow(headers)
+        
+        # Write data
+        for row in sessions:
+            writer.writerow([row[col] for col in row.keys()])
+        
+        # Create the response
+        output = si.getvalue()
+        si.close()
+        
+        # Generate filename
+        filename = f"sit_in_sessions_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        
+        return output, 200, {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': f'attachment; filename={filename}'
+        }
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_reports'))
+    finally:
+        conn.close()
+
+@app.route('/admin/reports/export/feedback/<student_id>')
+def export_feedback_csv(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get student info for filename
+        student = conn.execute("""
+            SELECT lastname, firstname 
+            FROM students 
+            WHERE idno = ?
+        """, (student_id,)).fetchone()
+        
+        if not student:
+            flash("Student not found.", "danger")
+            return redirect(url_for('admin_reports'))
+        
+        # Get student's feedback
+        feedback = conn.execute("""
+            SELECT 
+                s.idno as "ID Number",
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
+                l.room_number || ' - ' || l.building as "Laboratory Room",
+                DATE(ls.check_in_time) as "Date",
+                sf.rating as "Rating",
+                sf.comments as "Comments"
+            FROM session_feedback sf
+            JOIN lab_sessions ls ON sf.session_id = ls.session_id
+            JOIN students s ON sf.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE sf.student_id = ?
+            ORDER BY ls.check_in_time DESC
+        """, (student_id,)).fetchall()
+        
+        # Create CSV in memory
+        si = StringIO()
+        writer = csv.writer(si)
+        
+        # Write headers
+        headers = [
+            "ID Number",
+            "Name",
+            "Laboratory Room",
+            "Date",
+            "Rating",
+            "Comments"
+        ]
+        writer.writerow(headers)
+        
+        # Write data
+        for row in feedback:
+            writer.writerow([row[col] for col in row.keys()])
+        
+        # Create the response
+        output = si.getvalue()
+        si.close()
+        
+        # Generate filename
+        filename = f"feedback_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        
+        return output, 200, {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': f'attachment; filename={filename}'
+        }
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_reports'))
+    finally:
+        conn.close()
+
+@app.route('/admin/reports/export/sessions/excel/<student_id>')
+def export_sessions_excel(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get student info for filename
+        student = conn.execute("""
+            SELECT lastname, firstname 
+            FROM students 
+            WHERE idno = ?
+        """, (student_id,)).fetchone()
+        
+        if not student:
+            flash("Student not found.", "danger")
+            return redirect(url_for('admin_reports'))
+        
+        # Get student's sit-in sessions
+        sessions = conn.execute("""
+            SELECT 
+                s.idno as "ID Number",
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
+                ls.notes as "Purpose",
+                l.room_number || ' - ' || l.building as "Laboratory Room",
+                ls.check_in_time as "Check-in Time",
+                ls.check_out_time as "Check-out Time",
+                DATE(ls.check_in_time) as "Date",
+                ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as "Duration (Hours)"
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.student_id = ? AND ls.status = 'Completed'
+            ORDER BY ls.check_in_time DESC
+        """, (student_id,)).fetchall()
+        
+        # Create Excel workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sit-in Sessions"
+        
+        # Define headers
+        headers = [
+            "ID Number",
+            "Name",
+            "Purpose",
+            "Laboratory Room",
+            "Check-in Time",
+            "Check-out Time",
+            "Date",
+            "Duration (Hours)"
+        ]
+        
+        # Style for headers
+        header_fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        
+        # Write headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Write data
+        for row_idx, row in enumerate(sessions, 2):
+            for col_idx, col in enumerate(headers):
+                cell = ws.cell(row=row_idx, column=col_idx + 1, value=row[col])
+                cell.alignment = Alignment(horizontal='center')
+        
+        # Adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column = [cell for cell in column]
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column[0].column_letter].width = adjusted_width
+        
+        # Save to BytesIO
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+        
+        filename = f"sit_in_sessions_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        
+        return send_file(
+            excel_file,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_reports'))
+    finally:
+        conn.close()
+
+@app.route('/admin/reports/export/feedback/excel/<student_id>')
+def export_feedback_excel(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get student info for filename
+        student = conn.execute("""
+            SELECT lastname, firstname 
+            FROM students 
+            WHERE idno = ?
+        """, (student_id,)).fetchone()
+        
+        if not student:
+            flash("Student not found.", "danger")
+            return redirect(url_for('admin_reports'))
+        
+        # Get student's feedback
+        feedback = conn.execute("""
+            SELECT 
+                s.idno as "ID Number",
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
+                l.room_number || ' - ' || l.building as "Laboratory Room",
+                DATE(ls.check_in_time) as "Date",
+                sf.rating as "Rating",
+                sf.comments as "Comments"
+            FROM session_feedback sf
+            JOIN lab_sessions ls ON sf.session_id = ls.session_id
+            JOIN students s ON sf.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE sf.student_id = ?
+            ORDER BY ls.check_in_time DESC
+        """, (student_id,)).fetchall()
+        
+        # Create Excel workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Feedback"
+        
+        # Define headers
+        headers = [
+            "ID Number",
+            "Name",
+            "Laboratory Room",
+            "Date",
+            "Rating",
+            "Comments"
+        ]
+        
+        # Style for headers
+        header_fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        
+        # Write headers
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Write data
+        for row_idx, row in enumerate(feedback, 2):
+            for col_idx, col in enumerate(headers):
+                cell = ws.cell(row=row_idx, column=col_idx + 1, value=row[col])
+                # Center align all columns except Comments
+                if col != "Comments":
+                    cell.alignment = Alignment(horizontal='center')
+                # For Rating column, convert number to stars
+                if col == "Rating":
+                    cell.value = "★" * row[col] + "☆" * (5 - row[col])
+        
+        # Adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column = [cell for cell in column]
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column[0].column_letter].width = adjusted_width
+        
+        # Save to BytesIO
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+        
+        filename = f"feedback_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        
+        return send_file(
+            excel_file,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_reports'))
+    finally:
+        conn.close()
+
+@app.route('/admin/reports/export/sessions/pdf/<student_id>')
+def export_sessions_pdf(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get student info for filename and header
+        student = conn.execute("""
+            SELECT lastname, firstname 
+            FROM students 
+            WHERE idno = ?
+        """, (student_id,)).fetchone()
+        
+        if not student:
+            flash("Student not found.", "danger")
+            return redirect(url_for('admin_reports'))
+        
+        # Get student's sit-in sessions
+        sessions = conn.execute("""
+            SELECT 
+                s.idno as "ID Number",
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
+                ls.notes as "Purpose",
+                l.room_number || ' - ' || l.building as "Laboratory Room",
+                ls.check_in_time as "Check-in Time",
+                ls.check_out_time as "Check-out Time",
+                DATE(ls.check_in_time) as "Date",
+                ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as "Duration (Hours)"
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.student_id = ? AND ls.status = 'Completed'
+            ORDER BY ls.check_in_time DESC
+        """, (student_id,)).fetchall()
+
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Create the PDF document
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72
+        )
+        
+        # Container for the 'Flowable' objects
+        elements = []
+        
+        # Define styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=30
+        )
+        
+        # Add the title
+        title = Paragraph(f"Sit-in Sessions Report - {student['lastname']}, {student['firstname']}", title_style)
+        elements.append(title)
+
+        # Define headers
+        headers = [
+            "ID Number",
+            "Name",
+            "Purpose",
+            "Laboratory Room",
+            "Check-in Time",
+            "Check-out Time",
+            "Date",
+            "Duration (Hours)"
+        ]
+
+        # For each session, create a separate table with column format
+        for session_row in sessions:
+            # Convert row to dict for easier access
+            session_dict = dict(session_row)
+            
+            # Create data for this session's table
+            data = []
+            for header in headers:
+                data.append([header, session_dict[header]])
+            
+            # Create table for this session
+            table = Table(data, colWidths=[2*inch, 4*inch])
+            
+            # Style the table
+            style = TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), colors.green),  # Header column background
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.whitesmoke),  # Header column text color
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Left align all cells
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),  # Bold font for header column
+                ('FONTSIZE', (0, 0), (-1, -1), 10),  # Font size for all cells
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
+                ('TOPPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),  # Grid for all cells
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Vertical alignment
+                ('WORDWRAP', (0, 0), (-1, -1), True),  # Enable word wrap
+            ])
+            table.setStyle(style)
+            
+            # Add the table to elements
+            elements.append(table)
+            # Add some space between session tables
+            elements.append(Spacer(1, 20))
+        
+        # Build the PDF document
+        doc.build(elements)
+        
+        # Get the value of the BytesIO buffer
+        pdf = buffer.getvalue()
+        buffer.close()
+        
+        filename = f"sit_in_sessions_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.pdf"
+        
+        return send_file(
+            BytesIO(pdf),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_reports'))
+    finally:
+        conn.close()
+
+@app.route('/admin/reports/export/feedback/pdf/<student_id>')
+def export_feedback_pdf(student_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Get student info for filename and header
+        student = conn.execute("""
+            SELECT lastname, firstname 
+            FROM students 
+            WHERE idno = ?
+        """, (student_id,)).fetchone()
+        
+        if not student:
+            flash("Student not found.", "danger")
+            return redirect(url_for('admin_reports'))
+        
+        # Get student's feedback
+        feedback = conn.execute("""
+            SELECT 
+                s.idno as "ID Number",
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
+                l.room_number || ' - ' || l.building as "Laboratory Room",
+                DATE(ls.check_in_time) as "Date",
+                sf.rating as "Rating",
+                sf.comments as "Comments"
+            FROM session_feedback sf
+            JOIN lab_sessions ls ON sf.session_id = ls.session_id
+            JOIN students s ON sf.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE sf.student_id = ?
+            ORDER BY ls.check_in_time DESC
+        """, (student_id,)).fetchall()
+
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Create the PDF document
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72
+        )
+        
+        # Container for the 'Flowable' objects
+        elements = []
+        
+        # Define styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=30
+        )
+        
+        # Add the title
+        title = Paragraph(f"Feedback Report - {student['lastname']}, {student['firstname']}", title_style)
+        elements.append(title)
+
+        # For each feedback entry, create a separate table with column format
+        for feedback_entry in feedback:
+            # Convert row to dict for easier access
+            feedback_dict = dict(feedback_entry)
+            
+            # Convert rating to stars
+            rating = "★" * feedback_dict["Rating"] + "☆" * (5 - feedback_dict["Rating"])
+            feedback_dict["Rating"] = rating
+            
+            # Create data for this feedback's table
+            data = []
+            for header in ["ID Number", "Name", "Laboratory Room", "Date", "Rating", "Comments"]:
+                data.append([header, feedback_dict[header]])
+            
+            # Create table for this feedback
+            table = Table(data, colWidths=[2*inch, 4*inch])
+            
+            # Style the table
+            style = TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), colors.green),  # Header column background
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.whitesmoke),  # Header column text color
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Left align all cells
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),  # Bold font for header column
+                ('FONTSIZE', (0, 0), (-1, -1), 10),  # Font size for all cells
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
+                ('TOPPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),  # Grid for all cells
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Vertical alignment
+                ('WORDWRAP', (0, 0), (-1, -1), True),  # Enable word wrap
+            ])
+            table.setStyle(style)
+            
+            # Add the table to elements
+            elements.append(table)
+            # Add some space between feedback tables
+            elements.append(Spacer(1, 20))
+        
+        # Build the PDF document
+        doc.build(elements)
+        
+        # Get the value of the BytesIO buffer
+        pdf = buffer.getvalue()
+        buffer.close()
+        
+        filename = f"feedback_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.pdf"
+        
+        return send_file(
+            BytesIO(pdf),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_reports'))
+    finally:
+        conn.close()
+
+if __name__ == '__main__':
+    app.run(debug=True)

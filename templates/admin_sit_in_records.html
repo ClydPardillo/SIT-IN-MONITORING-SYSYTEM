@@ -1,0 +1,387 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Menu</h3>
+      <ul>
+        <li><a href="{{ url_for('admin_dashboard') }}">Student List</a></li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}">Current Sit-In</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}" class="active"
+            >View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}">Announcements</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}">Generate Reports</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Admin - Sit-in Records</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="content-row" style="margin-bottom: 30px">
+      <div class="schedule-card" style="flex: 1; margin-right: 15px">
+        <h4>
+          <i class="fa fa-chart-bar" aria-hidden="true"></i> Language Usage
+          Analytics
+        </h4>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          "
+        >
+          <div style="text-align: center; flex: 1">
+            <h3 style="color: #4caf50; margin: 0">{{ total_sessions }}</h3>
+            <p style="margin: 5px 0 0 0">Total Completed Sessions</p>
+          </div>
+        </div>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+          "
+        >
+          {% for stat in purpose_stats %}
+          <div
+            style="
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              text-align: center;
+            "
+          >
+            <h4 style="margin: 0 0 10px 0; color: #333">{{ stat.purpose }}</h4>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <div
+                style="
+                  width: 40px;
+                  height: 40px;
+                  background: #4caf50;
+                  color: white;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin-right: 10px;
+                "
+              >
+                {{ stat.count }}
+              </div>
+              <div style="text-align: left">
+                <div style="font-size: 14px; color: #666">Sessions</div>
+                <div style="font-size: 12px; color: #888">
+                  {{ "%.1f"|format(stat.count / total_sessions * 100) }}%
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="schedule-card" style="flex: 1">
+        <h4>
+          <i class="fa fa-building" aria-hidden="true"></i> Laboratory Usage
+          Analytics
+        </h4>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          "
+        >
+          <div style="text-align: center; flex: 1">
+            <h3 style="color: #2196f3; margin: 0">{{ total_sessions }}</h3>
+            <p style="margin: 5px 0 0 0">Total Completed Sessions</p>
+          </div>
+        </div>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+          "
+        >
+          {% for lab in lab_stats %}
+          <div
+            style="
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              text-align: center;
+            "
+          >
+            <h4 style="margin: 0 0 10px 0; color: #333">
+              {{ lab.building }} - Room {{ lab.room_number }}
+            </h4>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <div
+                style="
+                  width: 40px;
+                  height: 40px;
+                  background: #2196f3;
+                  color: white;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin-right: 10px;
+                "
+              >
+                {{ lab.count }}
+              </div>
+              <div style="text-align: left">
+                <div style="font-size: 14px; color: #666">Sessions</div>
+                <div style="font-size: 12px; color: #888">
+                  {{ "%.1f"|format(lab.count / total_sessions * 100) }}%
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="content-row" style="margin-bottom: 20px">
+      <div class="schedule-card" style="width: 100%; padding: 15px">
+        <div style="position: relative">
+          <input
+            type="text"
+            id="sessionSearch"
+            placeholder="Search by ID, Name, or Laboratory..."
+            style="
+              width: 100%;
+              padding: 10px 15px;
+              padding-left: 35px;
+              border: 2px solid #a1a1a1;
+              border-radius: 5px;
+              font-size: 14px;
+              outline: none;
+              transition: border-color 0.3s;
+            "
+            onkeyup="handleSearchInput(event)"
+          />
+          <i
+            class="fa fa-search"
+            style="
+              position: absolute;
+              left: 12px;
+              top: 50%;
+              transform: translateY(-50%);
+              color: #666;
+            "
+          ></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Row -->
+    <div class="content-row">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i
+            class="fa fa-history"
+            aria-hidden="true"
+            style="margin-right: 5px"
+          ></i>
+          Completed Sessions
+        </h4>
+
+        {% if completed_sessions %}
+        <table id="sessionTable" style="width: 100%; border-collapse: collapse">
+          <thead>
+            <tr>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">IDNO</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">Name</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Course
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">Year</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Laboratory
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Purpose
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Check In
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Check Out
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Duration
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in completed_sessions %}
+            <tr>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.idno }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.lastname }}, {{ session.firstname }}{% if
+                session.midname %} {{ session.midname }}{% endif %}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.course }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.year_level }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.building }} - Room {{ session.room_number }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.purpose }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.check_in_time|format_time }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.check_out_time|format_time }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ session.duration }} hrs
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div style="text-align: center; padding: 20px">
+          <p style="color: #666; font-size: 16px">
+            No completed sessions found.
+          </p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function handleSearchInput(event) {
+    var input = document.getElementById("sessionSearch");
+    var filter = input.value.toLowerCase();
+    var table = document.getElementById("sessionTable");
+    var tr = table.getElementsByTagName("tr");
+
+    for (var i = 1; i < tr.length; i++) {
+      var td = tr[i].getElementsByTagName("td");
+      var found = false;
+
+      for (var j = 0; j < td.length; j++) {
+        var cell = td[j];
+        if (cell) {
+          var text = cell.textContent || cell.innerText;
+          if (text.toLowerCase().indexOf(filter) > -1) {
+            found = true;
+            break;
+          }
+        }
+      }
+
+      tr[i].style.display = found ? "" : "none";
+    }
+  }
+</script>
+
+{% endblock %}

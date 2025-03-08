@@ -1,0 +1,660 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Menu</h3>
+      <ul>
+        <li>
+          <a href="{{ url_for('admin_dashboard') }}" class="active"
+            >Student List</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}">Current Sit-In</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            >View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}">Announcements</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}">Generate Reports</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Admin - Student List</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="content-row" style="margin-bottom: 30px">
+      <div class="schedule-card" style="flex: 1; margin-right: 15px">
+        <h4>
+          <i class="fa fa-users" aria-hidden="true"></i> Student Statistics
+        </h4>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          "
+        >
+          <div style="text-align: center; flex: 1">
+            <h3 style="color: #4caf50; margin: 0">{{ total_students }}</h3>
+            <p style="margin: 5px 0 0 0">Total Registered Students</p>
+          </div>
+        </div>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+          "
+        >
+          <div
+            style="
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              text-align: center;
+            "
+          >
+            <h4 style="margin: 0 0 10px 0; color: #333">Active Sessions</h4>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <div
+                style="
+                  width: 40px;
+                  height: 40px;
+                  background: #ff9800;
+                  color: white;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin-right: 10px;
+                "
+              >
+                {{ active_sessions }}
+              </div>
+              <div style="text-align: left">
+                <div style="font-size: 14px; color: #666">Students</div>
+                <div style="font-size: 12px; color: #888">
+                  {{ "%.1f"|format(active_sessions / total_students * 100) }}%
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style="
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              text-align: center;
+            "
+          >
+            <h4 style="margin: 0 0 10px 0; color: #333">Total Sit-ins</h4>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <div
+                style="
+                  width: 40px;
+                  height: 40px;
+                  background: #2196f3;
+                  color: white;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin-right: 10px;
+                "
+              >
+                {{ total_sit_ins }}
+              </div>
+              <div style="text-align: left">
+                <div style="font-size: 14px; color: #666">Completed</div>
+                <div style="font-size: 12px; color: #888">
+                  {{ "%.1f"|format(total_sit_ins / total_students * 100) }}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="content-row" style="margin-bottom: 20px">
+      <div class="schedule-card" style="width: 100%; padding: 15px">
+        <div style="position: relative">
+          <input
+            type="text"
+            id="studentSearch"
+            placeholder="Search by ID, Name, or Course..."
+            style="
+              width: 100%;
+              padding: 10px 15px;
+              padding-left: 35px;
+              border: 2px solid #a1a1a1;
+              border-radius: 5px;
+              font-size: 14px;
+              outline: none;
+              transition: border-color 0.3s;
+            "
+            onkeyup="handleSearchInput(event)"
+          />
+          <i
+            class="fa fa-search"
+            style="
+              position: absolute;
+              left: 12px;
+              top: 50%;
+              transform: translateY(-50%);
+              color: #666;
+            "
+          ></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Row -->
+    <div class="content-row">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i
+            class="fa fa-users"
+            aria-hidden="true"
+            style="margin-right: 5px"
+          ></i>
+          Student List
+        </h4>
+
+        {% if students %}
+        <table id="studentTable" style="width: 100%; border-collapse: collapse">
+          <thead>
+            <tr>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">IDNO</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">Name</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Course
+              </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">Year</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in students %}
+            <tr>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ s.idno }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ s.lastname }}, {{ s.firstname }}{% if s.midname %} {{
+                s.midname }}{% endif %}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ s.course }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ s.year_level }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {{ s.email_address }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p>No students found.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Student Details Modal -->
+<div
+  id="studentModal"
+  style="
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  "
+>
+  <div
+    style="
+      position: relative;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 35px;
+      border-radius: 12px;
+      width: 95%;
+      max-width: 600px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    "
+  >
+    <div
+      style="
+        text-align: center;
+        margin-bottom: 25px;
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 15px;
+        position: relative;
+      "
+    >
+      <h4 style="margin: 0; font-size: 1.5em; color: #2c3e50; font-weight: 600">
+        Student Details
+      </h4>
+      <button
+        onclick="closeModal()"
+        style="
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #666;
+          transition: color 0.3s;
+          padding: 5px;
+          border-radius: 5px;
+          position: absolute;
+          right: -10px;
+          top: -10px;
+        "
+        onmouseover="this.style.color='#ff6b6b'"
+        onmouseout="this.style.color='#666'"
+      >
+        &times;
+      </button>
+    </div>
+
+    <div style="margin-bottom: 25px">
+      <div class="form-group" style="margin-bottom: 20px">
+        <label
+          style="
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 500;
+          "
+        >
+          ID Number:
+        </label>
+        <input
+          type="text"
+          id="modalIdno"
+          readonly
+          style="
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+          "
+        />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px">
+        <label
+          style="
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 500;
+          "
+        >
+          Student Name:
+        </label>
+        <input
+          type="text"
+          id="modalName"
+          readonly
+          style="
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+          "
+        />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px">
+        <label
+          style="
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 500;
+          "
+        >
+          Remaining Sessions:
+        </label>
+        <input
+          type="text"
+          id="modalRemaining"
+          readonly
+          style="
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+          "
+        />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px">
+        <label
+          style="
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 500;
+          "
+        >
+          Purpose:
+        </label>
+        <select
+          id="modalPurpose"
+          style="
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            transition: border-color 0.3s, box-shadow 0.3s;
+          "
+          onmouseover="this.style.borderColor='#4CAF50'"
+          onmouseout="this.style.borderColor='#e9ecef'"
+        >
+          <option value="" disabled selected>Select a purpose</option>
+          <option value="Python Programming">Python Programming</option>
+          <option value="JavaScript">JavaScript</option>
+          <option value="C Programming">C Programming</option>
+          <option value="C# Programming">C# Programming</option>
+          <option value="Java">Java</option>
+          <option value="SQL">SQL</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 20px">
+        <label
+          style="
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 500;
+          "
+        >
+          Laboratory:
+        </label>
+        <select
+          id="modalLab"
+          style="
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            background-color: #f8f9fa;
+            cursor: pointer;
+            transition: border-color 0.3s, box-shadow 0.3s;
+          "
+          onmouseover="this.style.borderColor='#4CAF50'"
+          onmouseout="this.style.borderColor='#e9ecef'"
+        >
+          <option value="" disabled selected>Select a laboratory</option>
+          {% for lab in labs %}
+          <option value="{{ lab.lab_id }}">
+            {{ lab.building }} - Room {{ lab.room_number }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div
+      style="
+        text-align: right;
+        padding-top: 15px;
+        border-top: 2px solid #f0f0f0;
+      "
+    >
+      <button
+        onclick="closeModal()"
+        style="
+          padding: 10px 20px;
+          margin-right: 15px;
+          border: none;
+          border-radius: 6px;
+          background-color: #e9ecef;
+          color: #495057;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.3s;
+        "
+        onmouseover="this.style.backgroundColor='#dee2e6'"
+        onmouseout="this.style.backgroundColor='#e9ecef'"
+      >
+        Cancel
+      </button>
+      <button
+        onclick="submitSession()"
+        style="
+          padding: 10px 20px;
+          border: none;
+          border-radius: 6px;
+          background-color: #4caf50;
+          color: white;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.3s;
+        "
+        onmouseover="this.style.backgroundColor='#45a049'"
+        onmouseout="this.style.backgroundColor='#4CAF50'"
+      >
+        Start Session
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function handleSearchInput(event) {
+    var input = document.getElementById("studentSearch");
+    var filter = input.value.toLowerCase();
+    var table = document.getElementById("studentTable");
+    var tr = table.getElementsByTagName("tr");
+
+    // If Enter key is pressed
+    if (event.key === "Enter") {
+      event.preventDefault();
+      // Find the first visible row
+      for (var i = 1; i < tr.length; i++) {
+        if (tr[i].style.display !== "none") {
+          // Get student data from the row
+          var tds = tr[i].getElementsByTagName("td");
+          openModal({
+            idno: tds[0].textContent.trim(),
+            name: tds[1].textContent.trim(),
+            course: tds[2].textContent.trim(),
+          });
+          break;
+        }
+      }
+      return;
+    }
+
+    // Normal search filtering
+    for (var i = 1; i < tr.length; i++) {
+      var td = tr[i].getElementsByTagName("td");
+      var found = false;
+
+      for (var j = 0; j < td.length; j++) {
+        var cell = td[j];
+        if (cell) {
+          var text = cell.textContent || cell.innerText;
+          if (text.toLowerCase().indexOf(filter) > -1) {
+            found = true;
+            break;
+          }
+        }
+      }
+
+      tr[i].style.display = found ? "" : "none";
+    }
+  }
+
+  function openModal(student) {
+    const modal = document.getElementById("studentModal");
+    modal.style.display = "block";
+    // Force reflow
+    modal.offsetHeight;
+    modal.style.opacity = "1";
+
+    // Fetch remaining sessions for the student
+    fetch(`/api/student_sessions/${student.idno}`)
+      .then((response) => response.json())
+      .then((data) => {
+        document.getElementById("modalIdno").value = student.idno;
+        document.getElementById("modalName").value = student.name;
+        document.getElementById("modalRemaining").value =
+          data.remaining_sessions;
+        document.getElementById("studentModal").style.display = "block";
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        alert("Error fetching student data");
+      });
+  }
+
+  function closeModal() {
+    document.getElementById("studentModal").style.display = "none";
+    document.getElementById("modalPurpose").value = "";
+    document.getElementById("modalLab").value = "";
+  }
+
+  function submitSession() {
+    const data = {
+      student_id: document.getElementById("modalIdno").value,
+      lab_id: document.getElementById("modalLab").value,
+      purpose: document.getElementById("modalPurpose").value,
+    };
+
+    if (!data.lab_id) {
+      alert("Please select a laboratory");
+      return;
+    }
+
+    if (!data.purpose.trim()) {
+      alert("Please enter a purpose for the session");
+      return;
+    }
+
+    fetch("/api/start_session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          alert("Session started successfully!");
+          closeModal();
+        } else {
+          alert(data.message || "Error starting session");
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        alert("Error starting session");
+      });
+  }
+
+  // Close modal when clicking outside
+  window.onclick = function (event) {
+    var modal = document.getElementById("studentModal");
+    if (event.target == modal) {
+      closeModal();
+    }
+  };
+</script>
+
+{% endblock %}

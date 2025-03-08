@@ -1,0 +1,221 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Main</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Home</h3>
+      <ul>
+        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        <li><a href="{{ url_for('profile') }}">Profile</a></li>
+        <li>
+          <a href="{{ url_for('remaining_sessions') }}" class="active"
+            >Remaining Sessions</a
+          >
+        </li>
+        <li><a href="{{ url_for('sit_in_history') }}">Sit-in History</a></li>
+        <li><a href="{{ url_for('reservation') }}">Reservation</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Remaining Sessions</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Session Overview Cards -->
+    <div class="stats-row">
+      <!-- Remaining Sessions Card -->
+      <div class="stats-card">
+        <div class="stats-content" style="text-align: center">
+          <i
+            class="fa fa-clock-o"
+            style="font-size: 2em; color: #4caf50; margin-bottom: 10px"
+          ></i>
+          <h2 style="font-size: 3em; color: #4caf50">
+            {{ remaining_sessions }}
+          </h2>
+          <h4 style="color: #666">Remaining Sessions</h4>
+          <p style="color: #888; font-size: 0.9em">
+            Sessions available for this semester
+          </p>
+        </div>
+      </div>
+
+      <!-- Next Reservation Card -->
+      <div class="stats-card">
+        <div class="stats-content" style="text-align: center">
+          <i
+            class="fa fa-calendar"
+            style="font-size: 2em; color: #4caf50; margin-bottom: 10px"
+          ></i>
+          <h4 style="color: #666">Next Scheduled Session</h4>
+          {% if reservation %}
+          <div style="margin-top: 15px">
+            <p style="margin: 5px 0">
+              <strong>Date:</strong> {{ reservation.reservation_date }}
+            </p>
+            <p style="margin: 5px 0">
+              <strong>Time:</strong> {{ reservation.start_time|format_time }} -
+              {{ reservation.end_time|format_time }}
+            </p>
+            <p style="margin: 5px 0">
+              <strong>Location:</strong> {{ reservation.building }} - Room {{
+              reservation.room_number }}
+            </p>
+          </div>
+          {% else %}
+          <p style="color: #888; margin-top: 15px">No upcoming reservations</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Session History -->
+    <div class="content-row" style="margin-top: 30px">
+      <div class="schedule-card">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          "
+        >
+          <h4 style="margin: 0">
+            <i class="fa fa-history" style="margin-right: 10px"></i>
+            Session History
+          </h4>
+        </div>
+
+        {% if sessions %}
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr style="background-color: #f8f9fa">
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Date
+                </th>
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Location
+                </th>
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Check In
+                </th>
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Check Out
+                </th>
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Duration
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for session in sessions %}
+              <tr>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ session.check_in_time.split()[0] }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ session.building }} - Room {{ session.room_number }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ session.check_in_time.split()[1]|format_time }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ session.check_out_time.split()[1]|format_time }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ session.duration }} hrs
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 30px; color: #666">
+          <i
+            class="fa fa-info-circle"
+            style="font-size: 2em; color: #4caf50; margin-bottom: 15px"
+          ></i>
+          <p>No session history available yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

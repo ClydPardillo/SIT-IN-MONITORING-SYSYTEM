@@ -1,0 +1,235 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Main</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Home</h3>
+      <ul>
+        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        <li><a href="{{ url_for('profile') }}">Profile</a></li>
+        <li>
+          <a href="{{ url_for('remaining_sessions') }}">Remaining Sessions</a>
+        </li>
+        <li><a href="{{ url_for('sit_in_history') }}">Sit-in History</a></li>
+        <li>
+          <a href="{{ url_for('reservation') }}" class="active">Reservation</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Reservation</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Reservation Form -->
+    <div class="content-row">
+      <div class="schedule-card">
+        <h4>
+          <i
+            class="fa fa-calendar-plus-o"
+            aria-hidden="true"
+            style="margin-right: 10px"
+          ></i>
+          New Reservation
+        </h4>
+        <form action="{{ url_for('reservation') }}" method="POST">
+          <div class="form-group" style="margin-bottom: 20px">
+            <label for="lab_id">Select Laboratory:</label>
+            <select id="lab_id" name="lab_id" class="form-control" required>
+              <option value="" disabled selected>Choose a laboratory</option>
+              {% for lab in labs %}
+              <option value="{{ lab.lab_id }}">
+                {{ lab.building }} - Room {{ lab.room_number }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 20px">
+            <label for="reservation_date">Date:</label>
+            <input
+              type="date"
+              id="reservation_date"
+              name="reservation_date"
+              class="form-control"
+              min="{{ now }}"
+              required
+            />
+          </div>
+
+          <div class="form-group" style="margin-bottom: 20px">
+            <label for="start_time">Start Time:</label>
+            <input
+              type="time"
+              id="start_time"
+              name="start_time"
+              class="form-control"
+              required
+            />
+          </div>
+
+          <div class="form-group" style="margin-bottom: 20px">
+            <label for="end_time">End Time:</label>
+            <input
+              type="time"
+              id="end_time"
+              name="end_time"
+              class="form-control"
+              required
+            />
+          </div>
+
+          <div style="text-align: center">
+            <button
+              type="submit"
+              class="btn btn-primary"
+              style="
+                background-color: #4caf50;
+                border: none;
+                border-radius: 5px;
+                padding: 10px 30px;
+                color: white;
+                cursor: pointer;
+                transition: all 0.3s ease;
+              "
+            >
+              Submit Reservation
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Upcoming Reservations -->
+    <div class="content-row" style="margin-top: 30px">
+      <div class="schedule-card">
+        <h4>
+          <i
+            class="fa fa-calendar-check-o"
+            aria-hidden="true"
+            style="margin-right: 10px"
+          ></i>
+          My Reservations
+        </h4>
+
+        {% if reservations %}
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr style="background-color: #f8f9fa">
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Date
+                </th>
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Location
+                </th>
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Time
+                </th>
+                <th
+                  style="
+                    padding: 12px;
+                    border-bottom: 2px solid #dee2e6;
+                    color: #495057;
+                  "
+                >
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for res in reservations %}
+              <tr>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ res.reservation_date }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ res.building }} - Room {{ res.room_number }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ res.start_time|format_time }} - {{ res.end_time|format_time
+                  }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  <span class="badge {{ res.status_badge }}"
+                    >{{ res.status }}</span
+                  >
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 30px; color: #666">
+          <i
+            class="fa fa-info-circle"
+            style="font-size: 2em; color: #4caf50; margin-bottom: 15px"
+          ></i>
+          <p>No reservations found.</p>
+          <p style="font-size: 0.9em; color: #888; margin-top: 10px">
+            Your upcoming reservations will appear here.
+          </p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
