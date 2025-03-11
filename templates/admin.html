@@ -11,7 +11,7 @@
       <ul>
         <li>
           <a href="{{ url_for('admin_dashboard') }}" class="active"
-            >Student List</a
+            >Admin Dashboard</a
           >
         </li>
         <li>
@@ -35,7 +35,7 @@
   <!-- Main Content -->
   <div class="main-content">
     <div class="header">
-      <h1>Admin - Student List</h1>
+      <h1>Admin - Dashboard</h1>
       <a class="Btn" href="{{ url_for('logout') }}">
         <div class="sign">
           <i class="fa fa-sign-out" aria-hidden="true"></i>
@@ -196,7 +196,7 @@
             aria-hidden="true"
             style="margin-right: 5px"
           ></i>
-          Student List
+          Student Directory
         </h4>
 
         {% if students %}
