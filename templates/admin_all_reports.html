@@ -1,0 +1,467 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Menu</h3>
+      <ul>
+        <li><a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a></li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}">Current Sit-In</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            >View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}">Announcements</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}" class="active"
+            >Generate Reports</a
+          >
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>All Student Reports</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="content-row" style="margin-bottom: 30px">
+      <div class="schedule-card" style="flex: 1; margin-right: 15px">
+        <h4>
+          <i class="fa fa-chart-bar" aria-hidden="true"></i> Overall Statistics
+        </h4>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          "
+        >
+          <div style="text-align: center; flex: 1">
+            <h3 style="color: #4caf50; margin: 0">{{ total_sessions }}</h3>
+            <p style="margin: 5px 0 0 0">Total Completed Sessions</p>
+          </div>
+          <div style="text-align: center; flex: 1">
+            <h3 style="color: #2196f3; margin: 0">{{ students|length }}</h3>
+            <p style="margin: 5px 0 0 0">Total Students</p>
+          </div>
+          <div style="text-align: center; flex: 1">
+            <h3 style="color: #ff9800; margin: 0">{{ total_feedback }}</h3>
+            <p style="margin: 5px 0 0 0">Total Feedback Submissions</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Purpose Statistics -->
+    <div class="content-row" style="margin-bottom: 20px">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i class="fa fa-clipboard-list" aria-hidden="true"></i> Purpose
+          Statistics
+        </h4>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+          "
+        >
+          {% for purpose in purpose_stats %}
+          <div
+            style="
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              text-align: center;
+            "
+          >
+            <h4 style="margin: 0 0 10px 0; color: #333">
+              {{ purpose.purpose }}
+            </h4>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <div
+                style="
+                  width: 40px;
+                  height: 40px;
+                  background: #ff9800;
+                  color: white;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin-right: 10px;
+                "
+              >
+                {{ purpose.count }}
+              </div>
+              <div style="text-align: left">
+                <div style="font-size: 14px; color: #666">Sessions</div>
+                <div style="font-size: 12px; color: #888">
+                  {{ "%.1f"|format(purpose.count / total_sessions * 100) }}%
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Laboratory Usage Statistics -->
+    <div class="content-row" style="margin-bottom: 20px">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i class="fa fa-building" aria-hidden="true"></i> Laboratory Usage
+        </h4>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+          "
+        >
+          {% for lab in lab_stats %}
+          <div
+            style="
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 8px;
+              text-align: center;
+            "
+          >
+            <h4 style="margin: 0 0 10px 0; color: #333">{{ lab.lab }}</h4>
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+              "
+            >
+              <div
+                style="
+                  width: 40px;
+                  height: 40px;
+                  background: #2196f3;
+                  color: white;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  margin-right: 10px;
+                "
+              >
+                {{ lab.count }}
+              </div>
+              <div style="text-align: left">
+                <div style="font-size: 14px; color: #666">Sessions</div>
+                <div style="font-size: 12px; color: #888">
+                  {{ "%.1f"|format(lab.count / total_sessions * 100) }}%
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Sessions -->
+    <div class="content-row" style="margin-bottom: 20px">
+      <div class="schedule-card" style="width: 100%">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+          "
+        >
+          <h4>
+            <i class="fa fa-history" aria-hidden="true"></i> Recent Sessions
+          </h4>
+          <div>
+            <a
+              href="{{ url_for('export_all_sessions_csv') }}"
+              class="btn btn-sm"
+              style="
+                text-decoration: none;
+                background-color: #ffa500;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 3px;
+                margin-right: 5px;
+              "
+            >
+              <i class="fa fa-file-csv" aria-hidden="true"></i> Export to CSV
+            </a>
+            <a
+              href="{{ url_for('export_all_sessions_excel') }}"
+              class="btn btn-sm"
+              style="
+                text-decoration: none;
+                background-color: #4caf50;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 3px;
+                margin-right: 5px;
+              "
+            >
+              <i class="fa fa-file-excel" aria-hidden="true"></i> Export to
+              Excel
+            </a>
+            <a
+              href="{{ url_for('export_all_sessions_pdf') }}"
+              class="btn btn-sm"
+              style="
+                text-decoration: none;
+                background-color: #e74c3c;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 3px;
+              "
+            >
+              <i class="fa fa-file-pdf" aria-hidden="true"></i> Export to PDF
+            </a>
+          </div>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr style="background-color: #f8f9fa">
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  ID No.
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Name
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Purpose
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Laboratory
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Date
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Check-in
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Check-out
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Duration (h)
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for session in recent_sessions %}
+              <tr>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.idno }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.name }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.purpose }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.lab }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.date }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.check_in_time|format_time }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.check_out_time|format_time }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ session.duration }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Feedback -->
+    <div class="content-row" style="margin-bottom: 20px">
+      <div class="schedule-card" style="width: 100%">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+          "
+        >
+          <h4>
+            <i class="fa fa-comments" aria-hidden="true"></i> Recent Feedback
+          </h4>
+          <div>
+            <a
+              href="{{ url_for('export_all_feedback_csv') }}"
+              class="btn btn-sm"
+              style="
+                text-decoration: none;
+                background-color: #ffa500;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 3px;
+                margin-right: 5px;
+              "
+            >
+              <i class="fa fa-file-csv" aria-hidden="true"></i> Export to CSV
+            </a>
+            <a
+              href="{{ url_for('export_all_feedback_excel') }}"
+              class="btn btn-sm"
+              style="
+                text-decoration: none;
+                background-color: #4caf50;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 3px;
+                margin-right: 5px;
+              "
+            >
+              <i class="fa fa-file-excel" aria-hidden="true"></i> Export to
+              Excel
+            </a>
+            <a
+              href="{{ url_for('export_all_feedback_pdf') }}"
+              class="btn btn-sm"
+              style="
+                text-decoration: none;
+                background-color: #e74c3c;
+                color: white;
+                padding: 5px 10px;
+                border-radius: 3px;
+              "
+            >
+              <i class="fa fa-file-pdf" aria-hidden="true"></i> Export to PDF
+            </a>
+          </div>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr style="background-color: #f8f9fa">
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  ID No.
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Name
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Laboratory
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Date
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Rating
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">
+                  Comments
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for feedback in recent_feedback %}
+              <tr>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ feedback.idno }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ feedback.name }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ feedback.lab }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ feedback.date }}
+                </td>
+                <td
+                  style="
+                    padding: 12px;
+                    border-bottom: 1px solid #dee2e6;
+                    text-align: center;
+                  "
+                >
+                  {{ "★" * feedback.rating }}{{ "☆" * (5 - feedback.rating) }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ feedback.comments }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Back to Individual Reports -->
+    <div
+      class="content-row"
+      style="margin-top: 30px; margin-bottom: 40px; text-align: center"
+    >
+      <a
+        href="{{ url_for('admin_reports') }}"
+        class="btn"
+        style="
+          text-decoration: none;
+          background-color: #4caf50;
+          color: white;
+          padding: 12px 24px;
+          border-radius: 4px;
+          font-size: 16px;
+          display: inline-block;
+        "
+      >
+        <i
+          class="fa fa-arrow-left"
+          aria-hidden="true"
+          style="margin-right: 8px"
+        ></i>
+        Back to Individual Reports
+      </a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

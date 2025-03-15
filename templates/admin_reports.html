@@ -513,14 +513,37 @@
     <!-- Student List -->
     <div class="content-row">
       <div class="schedule-card" style="width: 100%">
-        <h4>
-          <i
-            class="fa fa-users"
-            aria-hidden="true"
-            style="margin-right: 5px"
-          ></i>
-          Student List
-        </h4>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+          "
+        >
+          <h4>
+            <i
+              class="fa fa-users"
+              aria-hidden="true"
+              style="margin-right: 5px"
+            ></i>
+            Student List
+          </h4>
+          <a
+            href="{{ url_for('admin_all_reports') }}"
+            class="btn"
+            style="
+              text-decoration: none;
+              background-color: #3498db;
+              color: white;
+              padding: 8px 15px;
+              border-radius: 4px;
+              font-size: 14px;
+            "
+          >
+            <i class="fa fa-file-alt" aria-hidden="true"></i> View All Reports
+          </a>
+        </div>
 
         {% if students %}
         <table id="studentTable" style="width: 100%; border-collapse: collapse">

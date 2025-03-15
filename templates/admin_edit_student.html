@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+    </div>
+    <div class="sidebar-menu">
+      <h3>Menu</h3>
+      <ul>
+        <li><a href="{{ url_for('admin_dashboard') }}" class="active">Admin Dashboard</a></li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}">Current Sit-In</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}">View Sit-in Records</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}">Announcements</a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}">Generate Reports</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Edit Student - {{ student.lastname }}, {{ student.firstname }}</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Side-by-Side Containers for Viewing & Editing -->
+    <div class="edit-profile-row" style="display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;">
+      
+      <!-- Left Container: Current Student Information -->
+      <div class="profile-info" style="background: white; padding: 30px; border-radius: 10px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1); flex: 1; min-width: 300px; max-width: 600px; padding-top: 80px;">
+        <!-- Centered Circular Profile Image -->
+        <div style="text-align: center; margin-bottom: 20px">
+          {% if student.image_path %}
+            <img
+              src="{{ url_for('static', filename=student.image_path) }}"
+              alt="Profile"
+              style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover;"
+            />
+          {% else %}
+            <!-- Default image if no image_path -->
+            <img
+              src="{{ url_for('static', filename='images/profile.png') }}"
+              alt="Profile"
+              style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover;"
+            />
+          {% endif %}
+        </div>
+        
+        <!-- Student Details Table -->
+        <table class="profile-table" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">IDNO:</th>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">{{ student.idno }}</td>
+          </tr>
+          <tr>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">Last Name:</th>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">{{ student.lastname }}</td>
+          </tr>
+          <tr>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">First Name:</th>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">{{ student.firstname }}</td>
+          </tr>
+          <tr>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">Middle Name:</th>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">{{ student.midname }}</td>
+          </tr>
+          <tr>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">Course:</th>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">{{ student.course }}</td>
+          </tr>
+          <tr>
+            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">Year Level:</th>
+            <td style="padding: 8px; border-bottom: 1px solid #ddd; padding-top: 20px; padding-bottom: 20px;">{{ student.year_level }}</td>
+          </tr>
+          <tr>
+            <th style="text-align: left; padding: 8px; padding-top: 20px; padding-bottom: 20px;">Email Address:</th>
+            <td style="padding: 8px; padding-top: 20px; padding-bottom: 20px;">{{ student.email_address }}</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Right Container: Edit Form -->
+      <div class="edit-form" style="background: white; padding: 30px; border-radius: 10px; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1); flex: 1; min-width: 300px; max-width: 600px;">
+        <form action="{{ url_for('admin_edit_student', student_id=student.idno) }}" method="POST" enctype="multipart/form-data">
+          <h2 style="text-align: center; margin-bottom: 20px;">Edit Student Information</h2>
+          
+          <!-- Profile Image with Delete Button -->
+          <div style="text-align: center; width: 100%; margin-bottom: 20px;">
+            <div style="position: relative; display: inline-block;">
+              <img
+                id="profileImageDisplay"
+                src="{{ url_for('static', filename=student.image_path if student.image_path else 'images/profile.png') }}"
+                alt="Profile"
+                style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover;"
+              />
+              {% if student.image_path %}
+              <button type="button" id="deleteImageBtn" onclick="deleteProfileImage()" 
+                style="position: absolute; bottom: 0; right: 0; width: 30px; height: 30px; border-radius: 50%; background-color: #f44336; border: 2px solid white; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+                <i class="fa fa-trash" aria-hidden="true" style="color: white; font-size: 12px;"></i>
+              </button>
+              <input type="checkbox" id="delete_image" name="delete_image" value="yes" style="display: none;">
+              {% endif %}
+            </div>
+          </div>
+          
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Profile Image:</th>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                <input type="file" id="profile_image" name="profile_image" accept="image/*" style="width: 100%; padding: 8px; border-radius: 5px; background-color: #e0e0e0;" onchange="previewImage(this);">
+              </td>
+            </tr>
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">IDNO:</th>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                <input type="text" id="idno" name="idno" value="{{ student.idno }}" readonly style="width: 100%; padding: 8px; border-radius: 5px;">
+              </td>
+            </tr>
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Last Name:</th>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                <input type="text" id="lastname" name="lastname" value="{{ student.lastname }}" style="width: 100%; padding: 8px; border-radius: 5px; background-color: #e0e0e0;">
+              </td>
+            </tr>
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">First Name:</th>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                <input type="text" id="firstname" name="firstname" value="{{ student.firstname }}" style="width: 100%; padding: 8px; border-radius: 5px; background-color: #e0e0e0;">
+              </td>
+            </tr>
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Middle Name:</th>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                <input type="text" id="midname" name="midname" value="{{ student.midname }}" style="width: 100%; padding: 8px; border-radius: 5px; background-color: #e0e0e0;">
+              </td>
+            </tr>
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Course:</th>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                <select id="course" name="course" style="width: 100%; padding: 8px; border-radius: 5px; background-color: #e0e0e0;">
+                  <option value="BSIT" {% if student.course == "BSIT" %}selected{% endif %}>Bachelor of Science in Information Technology (BSIT)</option>
+                  <option value="BSCS" {% if student.course == "BSCS" %}selected{% endif %}>Bachelor of Science in Computer Science (BSCS)</option>
+                  <option value="BSIS" {% if student.course == "BSIS" %}selected{% endif %}>Bachelor of Science in Information Systems (BSIS)</option>
+                  <option value="BSBA" {% if student.course == "BSBA" %}selected{% endif %}>Bachelor of Science in Business Administration (BSBA)</option>
+                  <option value="BSED" {% if student.course == "BSED" %}selected{% endif %}>Bachelor of Secondary Education (BSED)</option>
+                  <option value="BEED" {% if student.course == "BEED" %}selected{% endif %}>Bachelor of Elementary Education (BEED)</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Year Level:</th>
+              <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                <select id="year_level" name="year_level" style="width: 100%; padding: 8px; border-radius: 5px; background-color: #e0e0e0;">
+                  <option value="1st Year" {% if student.year_level == "1st Year" %}selected{% endif %}>1st Year</option>
+                  <option value="2nd Year" {% if student.year_level == "2nd Year" %}selected{% endif %}>2nd Year</option>
+                  <option value="3rd Year" {% if student.year_level == "3rd Year" %}selected{% endif %}>3rd Year</option>
+                  <option value="4th Year" {% if student.year_level == "4th Year" %}selected{% endif %}>4th Year</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <th style="text-align: left; padding: 8px;">Email Address:</th>
+              <td style="padding: 8px;">
+                <input type="email" id="email_address" name="email_address" value="{{ student.email_address }}" style="width: 100%; padding: 8px; border-radius: 5px; background-color: #e0e0e0;">
+              </td>
+            </tr>
+          </table>
+          
+          <!-- Submit & Cancel Buttons -->
+          <div style="text-align: center; margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+            <button type="submit" style="padding: 10px 20px; background: #57b846; color: white; border: none; border-radius: 5px; cursor: pointer;">
+              Update Student
+            </button>
+            <a href="{{ url_for('admin_dashboard') }}" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none;">
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function previewImage(input) {
+    if (input.files && input.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('profileImageDisplay').setAttribute('src', e.target.result);
+      }
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+  
+  function deleteProfileImage() {
+    document.getElementById('delete_image').checked = true;
+    document.getElementById('profileImageDisplay').src = "{{ url_for('static', filename='images/profile.png') }}";
+    document.getElementById('deleteImageBtn').style.display = 'none';
+  }
+</script>
+
+{% endblock %} 

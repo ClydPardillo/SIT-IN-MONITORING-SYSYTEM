@@ -196,7 +196,7 @@
             aria-hidden="true"
             style="margin-right: 5px"
           ></i>
-          Student Directory
+          Student List
         </h4>
 
         {% if students %}
@@ -210,6 +210,9 @@
               </th>
               <th style="padding: 8px; border-bottom: 1px solid #ddd">Year</th>
               <th style="padding: 8px; border-bottom: 1px solid #ddd">Email</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -260,6 +263,30 @@
                 "
               >
                 {{ s.email_address }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                <a
+                  href="{{ url_for('admin_edit_student', student_id=s.idno) }}"
+                  class="btn btn-sm btn-primary"
+                  style="
+                    text-decoration: none;
+                    padding: 4px 8px;
+                    background-color: #4caf50;
+                    color: white;
+                    border-radius: 4px;
+                    display: inline-block;
+                    font-size: 12px;
+                    border: none;
+                  "
+                >
+                  <i class="fa fa-pencil" aria-hidden="true"></i> Edit
+                </a>
               </td>
             </tr>
             {% endfor %}

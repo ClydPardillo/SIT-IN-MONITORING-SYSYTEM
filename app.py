@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, make_response
 import sqlite3
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
@@ -12,6 +12,9 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
+import io
+import xlsxwriter
+import pandas as pd
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key' 
@@ -1481,14 +1484,17 @@ def export_sessions_pdf(student_id):
         # Get student's sit-in sessions
         sessions = conn.execute("""
             SELECT 
-                s.idno as "ID Number",
-                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
-                ls.notes as "Purpose",
-                l.room_number || ' - ' || l.building as "Laboratory Room",
-                ls.check_in_time as "Check-in Time",
-                ls.check_out_time as "Check-out Time",
-                DATE(ls.check_in_time) as "Date",
-                ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as "Duration (Hours)"
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                ls.notes as purpose,
+                l.room_number,
+                l.building,
+                ls.check_in_time,
+                ls.check_out_time,
+                DATE(ls.check_in_time) as date,
+                ROUND((JULIANDAY(ls.check_out_time) - JULIANDAY(ls.check_in_time)) * 24, 2) as duration
             FROM lab_sessions ls
             JOIN students s ON ls.student_id = s.idno
             JOIN laboratories l ON ls.lab_id = l.lab_id
@@ -1517,80 +1523,84 @@ def export_sessions_pdf(student_id):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=16,
-            spaceAfter=30
+            fontSize=14,
+            textColor=colors.darkgreen,
+            spaceBefore=10,
+            spaceAfter=20,
+            alignment=1  # center alignment
         )
         
-        # Add the title
+        # Add title
         title = Paragraph(f"Sit-in Sessions Report - {student['lastname']}, {student['firstname']}", title_style)
         elements.append(title)
-
-        # Define headers
-        headers = [
-            "ID Number",
-            "Name",
-            "Purpose",
-            "Laboratory Room",
-            "Check-in Time",
-            "Check-out Time",
-            "Date",
-            "Duration (Hours)"
-        ]
-
-        # For each session, create a separate table with column format
-        for session_row in sessions:
-            # Convert row to dict for easier access
-            session_dict = dict(session_row)
-            
-            # Create data for this session's table
-            data = []
-            for header in headers:
-                data.append([header, session_dict[header]])
-            
-            # Create table for this session
-            table = Table(data, colWidths=[2*inch, 4*inch])
-            
-            # Style the table
-            style = TableStyle([
-                ('BACKGROUND', (0, 0), (0, -1), colors.green),  # Header column background
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.whitesmoke),  # Header column text color
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Left align all cells
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),  # Bold font for header column
-                ('FONTSIZE', (0, 0), (-1, -1), 10),  # Font size for all cells
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
-                ('TOPPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),  # Grid for all cells
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Vertical alignment
-                ('WORDWRAP', (0, 0), (-1, -1), True),  # Enable word wrap
-            ])
-            table.setStyle(style)
-            
-            # Add the table to elements
-            elements.append(table)
-            # Add some space between session tables
-            elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 12))
         
-        # Build the PDF document
+        # Define table data
+        data = []
+        # Add header row
+        headers = ['ID No.', 'Name', 'Purpose', 'Laboratory', 'Check-in', 'Check-out', 'Date', 'Duration']
+        data.append(headers)
+        
+        # Add session data rows
+        for session_row in sessions:
+            session_dict = dict(session_row)
+            name = f"{session_dict['lastname']}, {session_dict['firstname']} {session_dict['midname'] or ''}"
+            laboratory = f"{session_dict['building']} - Room {session_dict['room_number']}"
+            
+            data.append([
+                session_dict['idno'],
+                name,
+                session_dict['purpose'],
+                laboratory,
+                session_dict['check_in_time'],
+                session_dict['check_out_time'],
+                session_dict['date'],
+                f"{session_dict['duration']} hrs"
+            ])
+        
+        # Create the table with the data
+        table = Table(data, colWidths=[1*inch, 2*inch, 1.5*inch, 1.5*inch, 1.2*inch, 1.2*inch, 1*inch, 1*inch])
+        
+        # Add style to the table
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ])
+        table.setStyle(style)
+        
+        # Add the table to the elements
+        elements.append(table)
+        
+        # Build the PDF
         doc.build(elements)
         
         # Get the value of the BytesIO buffer
-        pdf = buffer.getvalue()
+        pdf_data = buffer.getvalue()
         buffer.close()
         
-        filename = f"sit_in_sessions_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.pdf"
+        # Create the response
+        response = make_response(pdf_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=sit_in_sessions_{student['lastname']}_{student['firstname']}_{datetime.now().strftime("%Y-%m-%d")}.pdf'
+        response.headers['Content-Type'] = 'application/pdf'
         
-        return send_file(
-            BytesIO(pdf),
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=filename
-        )
+        return response
         
-    except sqlite3.Error as e:
-        flash(f"Database error: {str(e)}", "danger")
+    except Exception as e:
+        print(f"Error exporting sessions PDF: {str(e)}")
+        flash('An error occurred while exporting the data.', 'error')
         return redirect(url_for('admin_reports'))
-    finally:
-        conn.close()
 
 @app.route('/admin/reports/export/feedback/pdf/<student_id>')
 def export_feedback_pdf(student_id):
@@ -1598,8 +1608,9 @@ def export_feedback_pdf(student_id):
         flash("Access denied. Admin privileges required.", "danger")
         return redirect(url_for('home'))
     
-    conn = get_db_connection()
     try:
+        conn = get_db_connection()
+        
         # Get student info for filename and header
         student = conn.execute("""
             SELECT lastname, firstname 
@@ -1614,12 +1625,15 @@ def export_feedback_pdf(student_id):
         # Get student's feedback
         feedback = conn.execute("""
             SELECT 
-                s.idno as "ID Number",
-                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as "Name",
-                l.room_number || ' - ' || l.building as "Laboratory Room",
-                DATE(ls.check_in_time) as "Date",
-                sf.rating as "Rating",
-                sf.comments as "Comments"
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                l.building,
+                l.room_number,
+                DATE(ls.check_in_time) as date,
+                sf.rating,
+                sf.comments
             FROM session_feedback sf
             JOIN lab_sessions ls ON sf.session_id = ls.session_id
             JOIN students s ON sf.student_id = s.idno
@@ -1649,72 +1663,892 @@ def export_feedback_pdf(student_id):
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
-            fontSize=16,
-            spaceAfter=30
+            fontSize=14,
+            textColor=colors.darkgreen,
+            spaceBefore=10,
+            spaceAfter=20,
+            alignment=1  # center alignment
         )
         
-        # Add the title
+        # Add title
         title = Paragraph(f"Feedback Report - {student['lastname']}, {student['firstname']}", title_style)
         elements.append(title)
-
-        # For each feedback entry, create a separate table with column format
-        for feedback_entry in feedback:
-            # Convert row to dict for easier access
-            feedback_dict = dict(feedback_entry)
-            
-            # Convert rating to stars
-            rating = "★" * feedback_dict["Rating"] + "☆" * (5 - feedback_dict["Rating"])
-            feedback_dict["Rating"] = rating
-            
-            # Create data for this feedback's table
-            data = []
-            for header in ["ID Number", "Name", "Laboratory Room", "Date", "Rating", "Comments"]:
-                data.append([header, feedback_dict[header]])
-            
-            # Create table for this feedback
-            table = Table(data, colWidths=[2*inch, 4*inch])
-            
-            # Style the table
-            style = TableStyle([
-                ('BACKGROUND', (0, 0), (0, -1), colors.green),  # Header column background
-                ('TEXTCOLOR', (0, 0), (0, -1), colors.whitesmoke),  # Header column text color
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),  # Left align all cells
-                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),  # Bold font for header column
-                ('FONTSIZE', (0, 0), (-1, -1), 10),  # Font size for all cells
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
-                ('TOPPADDING', (0, 0), (-1, -1), 6),  # Padding for all cells
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),  # Grid for all cells
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Vertical alignment
-                ('WORDWRAP', (0, 0), (-1, -1), True),  # Enable word wrap
-            ])
-            table.setStyle(style)
-            
-            # Add the table to elements
-            elements.append(table)
-            # Add some space between feedback tables
-            elements.append(Spacer(1, 20))
+        elements.append(Spacer(1, 12))
         
-        # Build the PDF document
+        # Define table data
+        data = []
+        # Add header row
+        headers = ['ID No.', 'Name', 'Laboratory', 'Date', 'Rating', 'Comments']
+        data.append(headers)
+        
+        # Add feedback data rows
+        for feedback_row in feedback:
+            feedback_dict = dict(feedback_row)
+            name = f"{feedback_dict['lastname']}, {feedback_dict['firstname']} {feedback_dict['midname'] or ''}"
+            laboratory = f"{feedback_dict['building']} - Room {feedback_dict['room_number']}"
+            stars = "★" * feedback_dict['rating'] + "☆" * (5 - feedback_dict['rating'])
+            
+            data.append([
+                feedback_dict['idno'],
+                name,
+                laboratory,
+                feedback_dict['date'],
+                stars,
+                feedback_dict['comments']
+            ])
+        
+        # Create the table with the data
+        table = Table(data, colWidths=[1*inch, 1.8*inch, 1.5*inch, 1*inch, 0.8*inch, 2.5*inch])
+        
+        # Add style to the table
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
+            ('ALIGN', (4, 1), (4, -1), 'CENTER'),  # Center align the rating column
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ])
+        table.setStyle(style)
+        
+        # Add the table to the elements
+        elements.append(table)
+        
+        # Build the PDF
         doc.build(elements)
         
         # Get the value of the BytesIO buffer
-        pdf = buffer.getvalue()
+        pdf_data = buffer.getvalue()
         buffer.close()
         
-        filename = f"feedback_{student['lastname']}_{student['firstname']}_{datetime.now().strftime('%Y-%m-%d')}.pdf"
+        # Create the response
+        response = make_response(pdf_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=feedback_{student['lastname']}_{student['firstname']}_{datetime.now().strftime("%Y-%m-%d")}.pdf'
+        response.headers['Content-Type'] = 'application/pdf'
         
-        return send_file(
-            BytesIO(pdf),
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=filename
+        return response
+        
+    except Exception as e:
+        print(f"Error exporting feedback PDF: {str(e)}")
+        flash('An error occurred while exporting the data.', 'error')
+        return redirect(url_for('admin_reports'))
+
+@app.route('/admin/reports/all')
+def admin_all_reports():
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    try:
+        # Fetch all students
+        students = conn.execute("""
+            SELECT idno, lastname, firstname, midname, course, year_level, email_address
+            FROM students
+            ORDER BY lastname, firstname
+        """).fetchall()
+        
+        # Get aggregate data for all students
+        # 1. Total completed sessions
+        total_sessions = conn.execute("""
+            SELECT COUNT(*) as count
+            FROM lab_sessions
+            WHERE status = 'Completed'
+        """).fetchone()['count']
+        
+        # 2. Total feedback submissions
+        total_feedback = conn.execute("""
+            SELECT COUNT(*) as count
+            FROM session_feedback
+        """).fetchone()['count']
+        
+        # 3. Laboratory usage statistics
+        lab_stats = conn.execute("""
+            SELECT 
+                l.building || ' - Room ' || l.room_number as lab,
+                COUNT(*) as count
+            FROM lab_sessions ls
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.status = 'Completed'
+            GROUP BY l.building, l.room_number
+            ORDER BY count DESC
+        """).fetchall()
+        
+        # 4. Purpose statistics
+        purpose_stats = conn.execute("""
+            SELECT 
+                notes as purpose,
+                COUNT(*) as count
+            FROM lab_sessions
+            WHERE status = 'Completed'
+            GROUP BY notes
+            ORDER BY count DESC
+        """).fetchall()
+        
+        # 5. Recent sessions (limit to 20)
+        recent_sessions = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as name,
+                ls.notes as purpose,
+                l.room_number || ' - ' || l.building as lab,
+                ls.check_in_time,
+                ls.check_out_time,
+                DATE(ls.check_in_time) as date,
+                ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as duration
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.status = 'Completed'
+            ORDER BY ls.check_in_time DESC
+            LIMIT 20
+        """).fetchall()
+        
+        # 6. Recent feedback (limit to 20)
+        recent_feedback = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname || ', ' || s.firstname || ' ' || COALESCE(s.midname, '') as name,
+                l.room_number || ' - ' || l.building as lab,
+                DATE(ls.check_in_time) as date,
+                sf.rating,
+                sf.comments
+            FROM session_feedback sf
+            JOIN lab_sessions ls ON sf.session_id = ls.session_id
+            JOIN students s ON sf.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            ORDER BY ls.check_in_time DESC
+            LIMIT 20
+        """).fetchall()
+        
+        return render_template(
+            'admin_all_reports.html',
+            students=students,
+            total_sessions=total_sessions,
+            total_feedback=total_feedback,
+            lab_stats=lab_stats,
+            purpose_stats=purpose_stats,
+            recent_sessions=recent_sessions,
+            recent_feedback=recent_feedback
         )
-        
+    
     except sqlite3.Error as e:
         flash(f"Database error: {str(e)}", "danger")
         return redirect(url_for('admin_reports'))
     finally:
         conn.close()
+
+@app.route('/admin/reports/export/all/sessions/csv')
+def export_all_sessions_csv():
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        # Get all sessions
+        sessions = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                ls.notes as purpose,
+                l.building,
+                l.room_number,
+                ls.check_in_time,
+                ls.check_out_time,
+                DATE(ls.check_in_time) as date,
+                ROUND((JULIANDAY(ls.check_out_time) - JULIANDAY(ls.check_in_time)) * 24, 2) as duration
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.check_out_time IS NOT NULL
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        # Create CSV
+        csv_data = io.StringIO()
+        csv_writer = csv.writer(csv_data)
+        
+        # Write headers
+        headers = ['ID Number', 'Last Name', 'First Name', 'Middle Name', 'Purpose', 'Building', 'Room Number', 'Check-in Time', 'Check-out Time', 'Date', 'Duration (Hours)']
+        csv_writer.writerow(headers)
+        
+        # Write data
+        for session_row in sessions:
+            session_dict = dict(session_row)
+            csv_writer.writerow([
+                session_dict['idno'],
+                session_dict['lastname'],
+                session_dict['firstname'],
+                session_dict['midname'] or "",
+                session_dict['purpose'] or "",
+                session_dict['building'],
+                session_dict['room_number'],
+                session_dict['check_in_time'],
+                session_dict['check_out_time'],
+                session_dict['date'],
+                session_dict['duration']
+            ])
+        
+        # Prepare response
+        response = make_response(csv_data.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename=all_sit_in_sessions_{datetime.now().strftime("%Y-%m-%d")}.csv'
+        response.headers['Content-Type'] = 'text/csv'
+        
+        return response
+    
+    except Exception as e:
+        print(f"Error exporting all sessions CSV: {str(e)}")
+        flash(f'An error occurred while exporting the data: {str(e)}', 'error')
+        return redirect(url_for('admin_all_reports'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/reports/export/all/feedback/csv')
+def export_all_feedback_csv():
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        # Get all feedback
+        feedback = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                l.building,
+                l.room_number,
+                DATE(ls.check_in_time) as date,
+                sf.rating,
+                sf.comments
+            FROM session_feedback sf
+            JOIN lab_sessions ls ON sf.session_id = ls.session_id
+            JOIN students s ON sf.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        # Create CSV
+        csv_data = io.StringIO()
+        csv_writer = csv.writer(csv_data)
+        
+        # Write headers
+        headers = ['ID Number', 'Last Name', 'First Name', 'Middle Name', 'Building', 'Room Number', 'Date', 'Rating', 'Comments']
+        csv_writer.writerow(headers)
+        
+        # Write data
+        for feedback_row in feedback:
+            feedback_dict = dict(feedback_row)
+            csv_writer.writerow([
+                feedback_dict['idno'],
+                feedback_dict['lastname'],
+                feedback_dict['firstname'],
+                feedback_dict['midname'] or "",
+                feedback_dict['building'],
+                feedback_dict['room_number'],
+                feedback_dict['date'],
+                feedback_dict['rating'],
+                feedback_dict['comments'] or ""
+            ])
+        
+        # Prepare response
+        response = make_response(csv_data.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename=all_feedback_{datetime.now().strftime("%Y-%m-%d")}.csv'
+        response.headers['Content-Type'] = 'text/csv'
+        
+        return response
+    
+    except Exception as e:
+        print(f"Error exporting all feedback CSV: {str(e)}")
+        flash(f'An error occurred while exporting the data: {str(e)}', 'error')
+        return redirect(url_for('admin_all_reports'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/reports/export/all/sessions/excel')
+def export_all_sessions_excel():
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        # Get all sessions
+        sessions = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                ls.notes as purpose,
+                l.building,
+                l.room_number,
+                ls.check_in_time,
+                ls.check_out_time,
+                DATE(ls.check_in_time) as date,
+                ROUND((JULIANDAY(ls.check_out_time) - JULIANDAY(ls.check_in_time)) * 24, 2) as duration
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.check_out_time IS NOT NULL
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        # Create a BytesIO object
+        output = BytesIO()
+        
+        # Use pandas to create an Excel file
+        import pandas as pd
+        
+        # Convert data to pandas DataFrame
+        data = []
+        for session_row in sessions:
+            session_dict = dict(session_row)
+            data.append({
+                'ID Number': session_dict['idno'],
+                'Last Name': session_dict['lastname'],
+                'First Name': session_dict['firstname'],
+                'Middle Name': session_dict['midname'] or "",
+                'Purpose': session_dict['purpose'] or "",
+                'Building': session_dict['building'],
+                'Room Number': session_dict['room_number'],
+                'Check-in Time': session_dict['check_in_time'],
+                'Check-out Time': session_dict['check_out_time'],
+                'Date': session_dict['date'],
+                'Duration (Hours)': session_dict['duration']
+            })
+        
+        df = pd.DataFrame(data)
+        
+        # Write DataFrame to Excel
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='All Sessions', index=False)
+            
+            # Access the workbook and the worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['All Sessions']
+            
+            # Add a header format
+            header_format = workbook.add_format({
+                'bold': True,
+                'fg_color': '#4CAF50',
+                'font_color': 'white',
+                'border': 1
+            })
+            
+            # Apply header format to the header row
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                
+            # Auto-adjust column widths
+            for i, col in enumerate(df.columns):
+                max_len = max(df[col].astype(str).str.len().max(), len(col)) + 2
+                worksheet.set_column(i, i, max_len)
+        
+        # Prepare response
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename=all_sit_in_sessions_{datetime.now().strftime("%Y-%m-%d")}.xlsx'
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error exporting all sessions Excel: {str(e)}")
+        flash(f'An error occurred while exporting the data: {str(e)}', 'error')
+        return redirect(url_for('admin_all_reports'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/reports/export/all/feedback/excel')
+def export_all_feedback_excel():
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        # Get all feedback
+        feedback = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                l.building,
+                l.room_number,
+                DATE(ls.check_in_time) as date,
+                sf.rating,
+                sf.comments
+            FROM session_feedback sf
+            JOIN lab_sessions ls ON sf.session_id = ls.session_id
+            JOIN students s ON sf.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        # Create a BytesIO object
+        output = BytesIO()
+        
+        # Use pandas to create an Excel file
+        import pandas as pd
+        
+        # Convert data to pandas DataFrame
+        data = []
+        for feedback_row in feedback:
+            feedback_dict = dict(feedback_row)
+            # Convert rating to stars
+            stars = "★" * feedback_dict['rating'] + "☆" * (5 - feedback_dict['rating'])
+            data.append({
+                'ID Number': feedback_dict['idno'],
+                'Last Name': feedback_dict['lastname'],
+                'First Name': feedback_dict['firstname'],
+                'Middle Name': feedback_dict['midname'] or "",
+                'Building': feedback_dict['building'],
+                'Room Number': feedback_dict['room_number'],
+                'Date': feedback_dict['date'],
+                'Rating': stars,
+                'Comments': feedback_dict['comments'] or ""
+            })
+        
+        df = pd.DataFrame(data)
+        
+        # Write DataFrame to Excel
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='All Feedback', index=False)
+            
+            # Access the workbook and the worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['All Feedback']
+            
+            # Add a header format
+            header_format = workbook.add_format({
+                'bold': True,
+                'fg_color': '#4CAF50',
+                'font_color': 'white',
+                'border': 1
+            })
+            
+            # Apply header format to the header row
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+                
+            # Auto-adjust column widths
+            for i, col in enumerate(df.columns):
+                if col == 'Comments':
+                    worksheet.set_column(i, i, 40)  # Make comments column wider
+                else:
+                    max_len = max(df[col].astype(str).str.len().max(), len(col)) + 2
+                    worksheet.set_column(i, i, max_len)
+        
+        # Prepare response
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers['Content-Disposition'] = f'attachment; filename=all_feedback_{datetime.now().strftime("%Y-%m-%d")}.xlsx'
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error exporting all feedback Excel: {str(e)}")
+        flash(f'An error occurred while exporting the data: {str(e)}', 'error')
+        return redirect(url_for('admin_all_reports'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/reports/export/all/sessions/pdf')
+def export_all_sessions_pdf():
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        # Get all sessions
+        sessions = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                ls.notes as purpose,
+                l.building,
+                l.room_number,
+                ls.check_in_time,
+                ls.check_out_time,
+                DATE(ls.check_in_time) as date,
+                ROUND((JULIANDAY(ls.check_out_time) - JULIANDAY(ls.check_in_time)) * 24, 2) as duration
+            FROM lab_sessions ls
+            JOIN students s ON ls.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            WHERE ls.check_out_time IS NOT NULL
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Create the PDF document
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72
+        )
+        
+        # Container for the 'Flowable' objects
+        elements = []
+        
+        # Define styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=14,
+            textColor=colors.darkgreen,
+            spaceBefore=10,
+            spaceAfter=20,
+            alignment=1  # center alignment
+        )
+        
+        # Add title
+        title = Paragraph(f"All Sit-in Sessions - {datetime.now().strftime('%Y-%m-%d')}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Define table data
+        data = []
+        # Add header row
+        headers = ['ID No.', 'Name', 'Purpose', 'Laboratory', 'Check-in', 'Check-out', 'Date', 'Duration']
+        data.append(headers)
+        
+        # Add session data rows
+        for session_row in sessions:
+            session_dict = dict(session_row)
+            name = f"{session_dict['lastname']}, {session_dict['firstname']} {session_dict['midname'] or ''}"
+            laboratory = f"{session_dict['building']} - Room {session_dict['room_number']}"
+            
+            data.append([
+                session_dict['idno'],
+                name,
+                session_dict['purpose'] or "",
+                laboratory,
+                session_dict['check_in_time'],
+                session_dict['check_out_time'],
+                session_dict['date'],
+                f"{session_dict['duration']} hrs"
+            ])
+        
+        # Create the table with the data
+        table = Table(data, colWidths=[1*inch, 2*inch, 1.5*inch, 1.5*inch, 1.2*inch, 1.2*inch, 1*inch, 1*inch])
+        
+        # Add style to the table
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ])
+        table.setStyle(style)
+        
+        # Add the table to the elements
+        elements.append(table)
+        
+        # Build the PDF
+        doc.build(elements)
+        
+        # Get the value of the BytesIO buffer
+        pdf_data = buffer.getvalue()
+        buffer.close()
+        
+        # Create the response
+        response = make_response(pdf_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=all_sit_in_sessions_{datetime.now().strftime("%Y-%m-%d")}.pdf'
+        response.headers['Content-Type'] = 'application/pdf'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error exporting all sessions PDF: {str(e)}")
+        flash(f'An error occurred while exporting the data: {str(e)}', 'error')
+        return redirect(url_for('admin_all_reports'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/reports/export/all/feedback/pdf')
+def export_all_feedback_pdf():
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        # Get all feedback
+        feedback = conn.execute("""
+            SELECT 
+                s.idno,
+                s.lastname,
+                s.firstname,
+                s.midname,
+                l.building,
+                l.room_number,
+                DATE(ls.check_in_time) as date,
+                sf.rating,
+                sf.comments
+            FROM session_feedback sf
+            JOIN lab_sessions ls ON sf.session_id = ls.session_id
+            JOIN students s ON sf.student_id = s.idno
+            JOIN laboratories l ON ls.lab_id = l.lab_id
+            ORDER BY ls.check_in_time DESC
+        """).fetchall()
+        
+        # Create PDF buffer
+        buffer = BytesIO()
+        
+        # Create the PDF document
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72
+        )
+        
+        # Container for the 'Flowable' objects
+        elements = []
+        
+        # Define styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=14,
+            textColor=colors.darkgreen,
+            spaceBefore=10,
+            spaceAfter=20,
+            alignment=1  # center alignment
+        )
+        
+        # Add title
+        title = Paragraph(f"All Student Feedback - {datetime.now().strftime('%Y-%m-%d')}", title_style)
+        elements.append(title)
+        elements.append(Spacer(1, 12))
+        
+        # Define table data
+        data = []
+        # Add header row
+        headers = ['ID No.', 'Name', 'Laboratory', 'Date', 'Rating', 'Comments']
+        data.append(headers)
+        
+        # Add feedback data rows
+        for feedback_row in feedback:
+            feedback_dict = dict(feedback_row)
+            name = f"{feedback_dict['lastname']}, {feedback_dict['firstname']} {feedback_dict['midname'] or ''}"
+            laboratory = f"{feedback_dict['building']} - Room {feedback_dict['room_number']}"
+            stars = "★" * feedback_dict['rating'] + "☆" * (5 - feedback_dict['rating'])
+            
+            data.append([
+                feedback_dict['idno'],
+                name,
+                laboratory,
+                feedback_dict['date'],
+                stars,
+                feedback_dict['comments'] or ""
+            ])
+        
+        # Create the table with the data
+        table = Table(data, colWidths=[1*inch, 1.8*inch, 1.5*inch, 1*inch, 0.8*inch, 2.5*inch])
+        
+        # Add style to the table
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
+            ('ALIGN', (4, 1), (4, -1), 'CENTER'),  # Center align the rating column
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+        ])
+        table.setStyle(style)
+        
+        # Add the table to the elements
+        elements.append(table)
+        
+        # Build the PDF
+        doc.build(elements)
+        
+        # Get the value of the BytesIO buffer
+        pdf_data = buffer.getvalue()
+        buffer.close()
+        
+        # Create the response
+        response = make_response(pdf_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=all_feedback_{datetime.now().strftime("%Y-%m-%d")}.pdf'
+        response.headers['Content-Type'] = 'application/pdf'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error exporting all feedback PDF: {str(e)}")
+        flash(f'An error occurred while exporting the data: {str(e)}', 'error')
+        return redirect(url_for('admin_all_reports'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/edit-student/<student_id>', methods=['GET', 'POST'])
+def admin_edit_student(student_id):
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    if request.method == 'POST':
+        # Retrieve form data
+        idno = request.form.get('idno')
+        lastname = request.form.get('lastname')
+        firstname = request.form.get('firstname')
+        midname = request.form.get('midname')
+        course = request.form.get('course')
+        year_level = request.form.get('year_level')
+        email_address = request.form.get('email_address')
+        delete_image = request.form.get('delete_image') == 'yes'  # Check if delete checkbox is checked
+
+        # Verify that the student ID matches the URL parameter
+        if idno != student_id:
+            flash("Student ID mismatch. Operation aborted.", "danger")
+            return redirect(url_for('admin_dashboard'))
+
+        # Check for email conflicts
+        existing_email = conn.execute(
+            "SELECT * FROM students WHERE email_address = ? AND idno != ?",
+            (email_address, idno)
+        ).fetchone()
+        if existing_email:
+            flash("Email is already used by another account.", "danger")
+            conn.close()
+            return redirect(url_for('admin_edit_student', student_id=student_id))
+        
+        # Get current student info to access current image path
+        current_student = conn.execute("SELECT image_path FROM students WHERE idno = ?", (idno,)).fetchone()
+        image_path = current_student['image_path']  # Keep current path by default
+        
+        # Handle profile image upload or deletion
+        profile_image = request.files.get('profile_image')
+        
+        if delete_image and image_path:
+            # Delete the physical file if it exists
+            if image_path:
+                file_path = os.path.join('static', image_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            # Set image_path to None in the database
+            image_path = None
+            
+        elif profile_image and profile_image.filename:
+            # Delete old image file if exists
+            if image_path:
+                old_file_path = os.path.join('static', image_path)
+                if os.path.exists(old_file_path):
+                    os.remove(old_file_path)
+                    
+            # Process new image
+            filename = secure_filename(profile_image.filename)
+            upload_folder = os.path.join('static', 'uploads')
+            if not os.path.exists(upload_folder):
+                os.makedirs(upload_folder)
+            save_path = os.path.join(upload_folder, filename)
+            profile_image.save(save_path)
+            image_path = os.path.join('uploads', filename).replace(os.sep, '/')
+
+        # Update student record including image path
+        conn.execute("""
+            UPDATE students
+            SET lastname = ?,
+                firstname = ?,
+                midname = ?,
+                course = ?,
+                year_level = ?,
+                email_address = ?,
+                image_path = ?
+            WHERE idno = ?
+        """, (lastname, firstname, midname, course, year_level, email_address, image_path, idno))
+        
+        conn.commit()
+        conn.close()
+        flash("Student updated successfully!", "success")
+        return redirect(url_for('admin_dashboard'))
+    
+    else:
+        # For GET requests, retrieve the specified student info
+        student = conn.execute("SELECT * FROM students WHERE idno = ?", (student_id,)).fetchone()
+        conn.close()
+        if not student:
+            flash("Student not found.", "danger")
+            return redirect(url_for('admin_dashboard'))
+        return render_template('admin_edit_student.html', student=student)
 
 if __name__ == '__main__':
     app.run(debug=True)
