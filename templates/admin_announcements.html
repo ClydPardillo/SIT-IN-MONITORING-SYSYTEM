@@ -5,26 +5,36 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <h2>UC - Admin</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-angle-left"></i>
+      </button>
     </div>
     <div class="sidebar-menu">
-      <h3>Menu</h3>
       <ul>
-        <li><a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a></li>
         <li>
-          <a href="{{ url_for('admin_current_sit_in') }}">Current Sit-In</a>
+          <a href="{{ url_for('admin_dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Admin Dashboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}"
+            ><i class="fa fa-users"></i> Current Sit-In</a
+          >
         </li>
         <li>
           <a href="{{ url_for('admin_sit_in_records') }}"
-            >View Sit-in Records</a
+            ><i class="fa fa-list-alt"></i> View Sit-in Records</a
           >
         </li>
         <li>
-          <a href="{{ url_for('admin_announcements') }}" class="active"
-            >Announcements</a
+          <a href="{{ url_for('admin_announcements') }}"
+            ><i class="fa fa-bullhorn"></i> Announcements</a
           >
         </li>
         <li>
-          <a href="{{ url_for('admin_reports') }}">Generate Reports</a>
+          <a href="{{ url_for('admin_reports') }}" class="active"
+            ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
         </li>
       </ul>
     </div>

@@ -42,19 +42,46 @@
       {% with messages = get_flashed_messages(with_categories=true) %} {% if
       messages %} {% for category, message in messages %}
       <div class="notification alert-{{ category }}">
-        <span class="icon">ℹ️</span>
+        <span class="icon">
+          {% if category == 'success' %}
+          <i class="fa fa-check-circle" aria-hidden="true"></i>
+          {% elif category == 'info' %}
+          <i class="fa fa-info-circle" aria-hidden="true"></i>
+          {% elif category in ['danger', 'error', 'failed'] %}
+          <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+          {% elif category == 'warning' %}
+          <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+          {% endif %}
+        </span>
         {{ message }}
       </div>
       {% endfor %} {% endif %} {% endwith %}
     </div>
+    <!-- Sidebar Toggle Button -->
+    <button id="sidebar-toggle" class="sidebar-toggle">
+      <i class="fa fa-bars"></i>
+    </button>
+
+    <!-- Overlay for mobile view -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
     {% block content %}{% endblock %}
 
     <script>
-      setTimeout(() => {
-        document
-          .querySelectorAll(".notification")
-          .forEach((el) => (el.style.display = "none"));
-      }, 4500);
+      // Auto-hide notifications after 5 seconds
+      document.addEventListener("DOMContentLoaded", function () {
+        const notifications = document.querySelectorAll(".notification");
+        if (notifications) {
+          notifications.forEach((notification) => {
+            setTimeout(() => {
+              notification.style.opacity = "0";
+              setTimeout(() => {
+                notification.style.display = "none";
+              }, 500);
+            }, 4500);
+          });
+        }
+      });
 
       function previewImage(input) {
         if (input.files && input.files[0]) {
@@ -138,5 +165,6 @@
         document.getElementById("profile_image").value = "";
       }
     </script>
+    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
   </body>
 </html>

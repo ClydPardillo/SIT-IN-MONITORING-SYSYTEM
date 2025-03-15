@@ -945,3 +945,162 @@ textarea.form-control {
   background-color: #4CAF50 !important; 
   color: white !important;
 }
+
+/* Responsive Sidebar Styles */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 999;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  cursor: pointer;
+  font-size: 18px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.sidebar-toggle:hover {
+  background-color: #3e8e41;
+}
+
+@media (max-width: 991px) {
+  .dashboard-container {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: -250px;
+    height: 100%;
+    z-index: 1000;
+    transition: all 0.3s ease;
+    box-shadow: 3px 0 10px rgba(0,0,0,0.1);
+  }
+  
+  .sidebar.active {
+    left: 0;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+    padding: 20px;
+  }
+  
+  .sidebar-toggle {
+    display: block;
+  }
+  
+  .header {
+    padding-left: 50px; /* Make room for the toggle button */
+  }
+}
+
+/* Overlay for closing sidebar when clicked outside */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0,0,0,0.4);
+  z-index: 999;
+  cursor: pointer;
+}
+
+/* Sidebar Collapse Functionality */
+.sidebar-inner-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  padding: 0;
+  margin-top: 10px;
+}
+
+.sidebar-inner-toggle i {
+  margin-left: 20px;
+  transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 70px;
+  min-width: 70px;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .sidebar-header h2,
+.sidebar.collapsed .sidebar-menu h3,
+.sidebar.collapsed .sidebar-menu a {
+  font-size: 0;
+  white-space: nowrap;
+}
+
+.sidebar.collapsed .sidebar-inner-toggle span {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-inner-toggle {
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.sidebar.collapsed .sidebar-menu li {
+  text-align: center;
+}
+
+.sidebar.collapsed .sidebar-menu a {
+  padding: 15px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar.collapsed .sidebar-menu a i {
+  font-size: 20px;
+  margin: 0;
+}
+
+.sidebar.collapsed .fa-angle-left {
+  transform: rotate(180deg);
+}
+
+.sidebar-menu a i {
+  margin-right: 10px;
+  width: 20px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.sidebar {
+  transition: width 0.3s ease;
+}
+
+.main-content {
+  transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed + .main-content {
+  margin-left: 70px;
+}
+
+/* Adjust existing media query for mobile compatibility */
+@media (max-width: 991px) {
+  .sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+  }
+  
+  .sidebar.collapsed + .main-content {
+    margin-left: 0;
+  }
+}

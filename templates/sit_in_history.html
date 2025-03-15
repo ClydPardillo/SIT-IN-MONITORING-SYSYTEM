@@ -4,22 +4,38 @@
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-header">
-      <h2>UC - Main</h2>
+      <h2>UC - Student</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-angle-left"></i>
+      </button>
     </div>
     <div class="sidebar-menu">
-      <h3>Home</h3>
       <ul>
-        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
-        <li><a href="{{ url_for('profile') }}">Profile</a></li>
         <li>
-          <a href="{{ url_for('remaining_sessions') }}">Remaining Sessions</a>
-        </li>
-        <li>
-          <a href="{{ url_for('sit_in_history') }}" class="active"
-            >Sit-in History</a
+          <a href="{{ url_for('dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Dashboard</a
           >
         </li>
-        <li><a href="{{ url_for('reservation') }}">Reservation</a></li>
+        <li>
+          <a href="{{ url_for('profile') }}"
+            ><i class="fa fa-user"></i> Profile</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('remaining_sessions') }}"
+            ><i class="fa fa-clock-o"></i> Remaining Sessions</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('sit_in_history') }}"
+            ><i class="fa fa-history"></i> Sit-in History</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('reservation') }}"
+            ><i class="fa fa-calendar"></i> Reservation</a
+          >
+        </li>
       </ul>
     </div>
   </div>
