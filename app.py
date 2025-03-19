@@ -940,6 +940,7 @@ def admin_sit_in_records():
                 s.firstname,
                 s.midname,
                 s.course,
+                s.year_level,
                 DATE(ls.check_in_time) as date,
                 ls.check_in_time,
                 ls.check_out_time,
