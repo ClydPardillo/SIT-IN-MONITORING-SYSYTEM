@@ -68,6 +68,37 @@
           <p style="color: #888; font-size: 0.9em">
             Sessions available for this semester
           </p>
+          {% if free_sessions > 0 %}
+          <div style="margin-top: 10px; padding: 5px; background-color: #f0f8ff; border-radius: 5px;">
+            <p style="color: #4b6584; font-size: 0.9em; margin: 0;">
+              <i class="fa fa-gift" style="color: #4b6584;"></i>
+              Includes {{ free_sessions }} free session(s) from behavior points!
+            </p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Behavior Points Card -->
+      <div class="stats-card">
+        <div class="stats-content" style="text-align: center">
+          <i
+            class="fa fa-star"
+            style="font-size: 2em; color: #fd9644; margin-bottom: 10px"
+          ></i>
+          <h2 style="font-size: 3em; color: #fd9644">
+            {{ behavior_points }}
+          </h2>
+          <h4 style="color: #666">Behavior Points</h4>
+          {% if points_until_next > 0 %}
+          <p style="color: #888; font-size: 0.9em">
+            {{ points_until_next }} more point(s) for a free session
+          </p>
+          {% else %}
+          <p style="color: #888; font-size: 0.9em">
+            Every 3 points earns 1 free session!
+          </p>
+          {% endif %}
         </div>
       </div>
 
@@ -102,6 +133,30 @@
 
     <!-- Session History -->
     <div class="content-row" style="margin-top: 30px">
+      <!-- Behavior Points Information -->
+      <div class="schedule-card" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h4 style="margin: 0">
+            <i class="fa fa-info-circle" style="margin-right: 10px"></i>
+            Behavior Points System
+          </h4>
+        </div>
+        <div style="padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+          <p style="margin-bottom: 10px;">
+            Earn behavior points for excellent conduct during lab sessions. Lab admins may award points when you:
+          </p>
+          <ul style="padding-left: 20px; margin-bottom: 15px;">
+            <li>Follow lab rules consistently</li>
+            <li>Help others in the lab environment</li>
+            <li>Keep your workspace clean and organized</li>
+            <li>Report issues or problems promptly</li>
+          </ul>
+          <p style="font-weight: bold; color: #4b6584;">
+            <i class="fa fa-gift" style="margin-right: 5px;"></i> Every 3 behavior points earned will automatically grant you 1 free lab session!
+          </p>
+        </div>
+      </div>
+
       <div class="schedule-card">
         <div
           style="

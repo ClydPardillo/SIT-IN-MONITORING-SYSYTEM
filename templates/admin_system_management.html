@@ -1,0 +1,363 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-angle-left"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('admin_dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Admin Dashboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}"
+            ><i class="fa fa-users"></i> Current Sit-In</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            ><i class="fa fa-list-alt"></i> View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}"
+            ><i class="fa fa-bullhorn"></i> Announcements</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}"
+            ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_system_management') }}" class="active"
+            ><i class="fa fa-cogs"></i> System Management</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
+          >
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>System Management</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- System Reset Section -->
+    <div class="content-row" style="margin-bottom: 30px">
+      <div class="schedule-card" style="flex: 1;">
+        <h4>
+          <i class="fa fa-refresh" aria-hidden="true"></i> System Reset Options
+        </h4>
+        <div style="padding: 15px;">
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff5722;">
+            <h5 style="margin-top: 0; color: #ff5722;"><i class="fa fa-exclamation-triangle"></i> Warning</h5>
+            <p style="margin-bottom: 5px;">The following actions cannot be undone. Please use with caution.</p>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+              <a href="#" class="reset-button" data-target="#resetSessionsModal" style="display: block; background: #f44336; color: white; padding: 12px 15px; border-radius: 5px; text-align: center; text-decoration: none; font-weight: bold;">
+                <i class="fa fa-eraser" aria-hidden="true"></i> Reset All Sessions
+              </a>
+              <p style="font-size: 12px; color: #666; margin-top: 5px;">Resets remaining sessions for all students to their default values.</p>
+            </div>
+            
+            <div>
+              <a href="#" class="reset-button" data-target="#resetPointsModal" style="display: block; background: #f44336; color: white; padding: 12px 15px; border-radius: 5px; text-align: center; text-decoration: none; font-weight: bold;">
+                <i class="fa fa-star-o" aria-hidden="true"></i> Reset All Behavior Points
+              </a>
+              <p style="font-size: 12px; color: #666; margin-top: 5px;">Clears all earned behavior points for all students.</p>
+            </div>
+            
+            <div>
+              <a href="#" class="reset-button" data-target="#resetAllDataModal" style="display: block; background: #d32f2f; color: white; padding: 12px 15px; border-radius: 5px; text-align: center; text-decoration: none; font-weight: bold;">
+                <i class="fa fa-trash" aria-hidden="true"></i> Reset All Data
+              </a>
+              <p style="font-size: 12px; color: #666; margin-top: 5px;">Resets both sessions and behavior points for all students.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Backup Section -->
+    <div class="content-row">
+      <div class="schedule-card" style="flex: 1;">
+        <h4>
+          <i class="fa fa-database" aria-hidden="true"></i> Database Management
+        </h4>
+        <div style="padding: 15px;">
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+            <h5 style="margin-top: 0; color: #2196f3;"><i class="fa fa-info-circle"></i> Information</h5>
+            <p style="margin-bottom: 5px;">These options allow you to backup and restore your database.</p>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+              <a href="{{ url_for('admin_backup_database') }}" style="display: block; background: #2196f3; color: white; padding: 12px 15px; border-radius: 5px; text-align: center; text-decoration: none; font-weight: bold;">
+                <i class="fa fa-download" aria-hidden="true"></i> Backup Database
+              </a>
+              <p style="font-size: 12px; color: #666; margin-top: 5px;">Downloads a backup copy of the current database.</p>
+            </div>
+            
+            <div>
+              <form action="{{ url_for('admin_restore_database') }}" method="post" enctype="multipart/form-data" style="margin-top: 15px;">
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; border: 1px dashed #ccc;">
+                  <label for="databaseFile" style="display: block; margin-bottom: 10px; font-weight: bold; color: #333;">
+                    <i class="fa fa-upload" aria-hidden="true"></i> Restore Database
+                  </label>
+                  <input type="file" id="databaseFile" name="database_file" style="width: 100%; margin-bottom: 10px;" accept=".db, .sqlite, .sqlite3">
+                  <button type="submit" style="width: 100%; padding: 10px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    <i class="fa fa-upload" aria-hidden="true"></i> Upload and Restore
+                  </button>
+                </div>
+                <p style="font-size: 12px; color: #666; margin-top: 5px;">Upload a database backup file to restore data.</p>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Sessions Modal -->
+<div id="resetSessionsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000;">
+  <div style="position: relative; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+    <div style="margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; position: relative;">
+      <h4 style="margin: 0; font-size: 1.3em; color: #f44336; font-weight: 600;">
+        <i class="fa fa-exclamation-triangle" style="color: #f44336;"></i> Reset All Sessions
+      </h4>
+      <button class="modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; position: absolute; right: -10px; top: -10px;">&times;</button>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <p>Are you sure you want to reset all student sessions to their default values? This will:</p>
+      <ul style="margin-bottom: 15px;">
+        <li>Reset session counts for BSIT/BSCS students to 30 sessions</li>
+        <li>Reset session counts for all other courses to 15 sessions</li>
+        <li>This action <strong>cannot be undone</strong></li>
+      </ul>
+      
+      <div style="margin-top: 20px; background-color: #fff8e1; padding: 15px; border-radius: 5px; border-left: 4px solid #ffa000;">
+        <div class="form-check">
+          <input type="checkbox" id="resetSessionsConfirm" style="margin-right: 8px;">
+          <label for="resetSessionsConfirm" style="font-weight: 500;">
+            I understand this action cannot be undone
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <div style="text-align: right; padding-top: 15px; border-top: 2px solid #f0f0f0;">
+      <button class="cancel-button" style="padding: 8px 15px; margin-right: 10px; border: none; border-radius: 4px; background-color: #e9ecef; color: #495057; cursor: pointer;">
+        Cancel
+      </button>
+      <button type="button" id="finalResetSessionsButton" disabled style="padding: 8px 15px; border: none; border-radius: 4px; background-color: #f44336; color: white; cursor: pointer; opacity: 0.6;">
+        Reset All Sessions
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Points Modal -->
+<div id="resetPointsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000;">
+  <div style="position: relative; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+    <div style="margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; position: relative;">
+      <h4 style="margin: 0; font-size: 1.3em; color: #f44336; font-weight: 600;">
+        <i class="fa fa-exclamation-triangle" style="color: #f44336;"></i> Reset All Behavior Points
+      </h4>
+      <button class="modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; position: absolute; right: -10px; top: -10px;">&times;</button>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <p>Are you sure you want to reset all student behavior points? This will:</p>
+      <ul style="margin-bottom: 15px;">
+        <li>Remove all earned behavior points for all students</li>
+        <li>Remove all free sessions earned from behavior points</li>
+        <li>This action <strong>cannot be undone</strong></li>
+      </ul>
+      
+      <div style="margin-top: 20px; background-color: #fff8e1; padding: 15px; border-radius: 5px; border-left: 4px solid #ffa000;">
+        <div class="form-check">
+          <input type="checkbox" id="resetPointsConfirm" style="margin-right: 8px;">
+          <label for="resetPointsConfirm" style="font-weight: 500;">
+            I understand this action cannot be undone
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <div style="text-align: right; padding-top: 15px; border-top: 2px solid #f0f0f0;">
+      <button class="cancel-button" style="padding: 8px 15px; margin-right: 10px; border: none; border-radius: 4px; background-color: #e9ecef; color: #495057; cursor: pointer;">
+        Cancel
+      </button>
+      <button type="button" id="finalResetPointsButton" disabled style="padding: 8px 15px; border: none; border-radius: 4px; background-color: #f44336; color: white; cursor: pointer; opacity: 0.6;">
+        Reset All Behavior Points
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Reset All Data Modal -->
+<div id="resetAllDataModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000;">
+  <div style="position: relative; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+    <div style="margin-bottom: 20px; border-bottom: 2px solid #f0f0f0; padding-bottom: 15px; position: relative;">
+      <h4 style="margin: 0; font-size: 1.3em; color: #d32f2f; font-weight: 600;">
+        <i class="fa fa-exclamation-triangle" style="color: #d32f2f;"></i> Reset All Student Data
+      </h4>
+      <button class="modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; position: absolute; right: -10px; top: -10px;">&times;</button>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <div style="background-color: #ffebee; padding: 15px; border-radius: 5px; border-left: 4px solid #d32f2f; margin-bottom: 20px;">
+        <p><strong>WARNING:</strong> Are you absolutely sure you want to reset all student data? This will:</p>
+        <ul style="margin-bottom: 10px;">
+          <li>Reset session counts for all students to their default values</li>
+          <li>Remove all earned behavior points for all students</li>
+          <li>Remove all free sessions earned from behavior points</li>
+          <li>This action <strong>cannot be undone</strong></li>
+        </ul>
+      </div>
+      
+      <div style="margin-top: 20px;">
+        <label for="resetConfirmationInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Type "RESET" to confirm:</label>
+        <input type="text" id="resetConfirmationInput" style="width: 100%; padding: 10px; border: 2px solid #e9ecef; border-radius: 5px; font-size: 14px;" placeholder="Type RESET here">
+      </div>
+    </div>
+    
+    <div style="text-align: right; padding-top: 15px; border-top: 2px solid #f0f0f0;">
+      <button class="cancel-button" style="padding: 8px 15px; margin-right: 10px; border: none; border-radius: 4px; background-color: #e9ecef; color: #495057; cursor: pointer;">
+        Cancel
+      </button>
+      <button type="button" id="finalResetAllButton" disabled style="padding: 8px 15px; border: none; border-radius: 4px; background-color: #d32f2f; color: white; cursor: pointer; opacity: 0.6;">
+        Reset All Data
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Pure JavaScript implementation for modals
+  document.addEventListener('DOMContentLoaded', function() {
+    // Modal open functionality
+    var resetButtons = document.querySelectorAll('.reset-button');
+    resetButtons.forEach(function(button) {
+      button.addEventListener('click', function(e) {
+        e.preventDefault();
+        var targetId = this.getAttribute('data-target').replace('#', '');
+        document.getElementById(targetId).style.display = 'block';
+      });
+    });
+    
+    // Modal close functionality
+    var closeButtons = document.querySelectorAll('.modal-close, .cancel-button');
+    closeButtons.forEach(function(button) {
+      button.addEventListener('click', function() {
+        var modal = this.closest('[id^="reset"]');
+        if (modal) modal.style.display = 'none';
+      });
+    });
+    
+    // Modal outside click closes modal
+    var modals = document.querySelectorAll('[id^="reset"][id$="Modal"]');
+    modals.forEach(function(modal) {
+      modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+          this.style.display = 'none';
+        }
+      });
+    });
+    
+    // Checkbox for sessions reset
+    var sessionsCheckbox = document.getElementById('resetSessionsConfirm');
+    if (sessionsCheckbox) {
+      sessionsCheckbox.addEventListener('change', function() {
+        var resetButton = document.getElementById('finalResetSessionsButton');
+        resetButton.disabled = !this.checked;
+        resetButton.style.opacity = this.checked ? '1' : '0.6';
+      });
+    }
+    
+    // Checkbox for points reset
+    var pointsCheckbox = document.getElementById('resetPointsConfirm');
+    if (pointsCheckbox) {
+      pointsCheckbox.addEventListener('change', function() {
+        var resetButton = document.getElementById('finalResetPointsButton');
+        resetButton.disabled = !this.checked;
+        resetButton.style.opacity = this.checked ? '1' : '0.6';
+      });
+    }
+    
+    // Text confirmation for full reset
+    var resetInput = document.getElementById('resetConfirmationInput');
+    if (resetInput) {
+      resetInput.addEventListener('input', function() {
+        var resetButton = document.getElementById('finalResetAllButton');
+        var isValid = this.value === 'RESET';
+        resetButton.disabled = !isValid;
+        resetButton.style.opacity = isValid ? '1' : '0.6';
+      });
+    }
+    
+    // Reset Sessions Button action
+    var sessionsButton = document.getElementById('finalResetSessionsButton');
+    if (sessionsButton) {
+      sessionsButton.addEventListener('click', function() {
+        if (confirm("Are you ABSOLUTELY SURE you want to reset all student sessions?")) {
+          window.location.href = "{{ url_for('admin_reset_sessions') }}";
+        }
+      });
+    }
+    
+    // Reset Points Button action
+    var pointsButton = document.getElementById('finalResetPointsButton');
+    if (pointsButton) {
+      pointsButton.addEventListener('click', function() {
+        if (confirm("Are you ABSOLUTELY SURE you want to reset all behavior points?")) {
+          window.location.href = "{{ url_for('admin_reset_points') }}";
+        }
+      });
+    }
+    
+    // Reset All Data Button action
+    var allDataButton = document.getElementById('finalResetAllButton');
+    if (allDataButton) {
+      allDataButton.addEventListener('click', function() {
+        if (confirm("Are you ABSOLUTELY SURE you want to reset ALL student data?")) {
+          window.location.href = "{{ url_for('admin_reset_all') }}";
+        }
+      });
+    }
+    
+    // Debug message
+    console.log("Pure JavaScript modal system initialized successfully");
+  });
+</script>
+
+{% endblock %} 

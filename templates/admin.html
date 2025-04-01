@@ -27,6 +27,11 @@
           >
         </li>
         <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
           <a href="{{ url_for('admin_announcements') }}"
             ><i class="fa fa-bullhorn"></i> Announcements</a
           >
@@ -34,6 +39,16 @@
         <li>
           <a href="{{ url_for('admin_reports') }}" class="active"
             ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System Management</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
           >
         </li>
       </ul>
@@ -159,6 +174,25 @@
           </div>
         </div>
       </div>
+
+      <!-- System Management Card -->
+      <div class="schedule-card" style="flex: 1;">
+        <h4>
+          <i class="fa fa-cogs" aria-hidden="true"></i> System Tools
+        </h4>
+        <div style="padding: 15px;">
+          <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+            <h5 style="margin-top: 0; color: #2196f3;"><i class="fa fa-info-circle"></i> Information</h5>
+            <p style="margin-bottom: 5px;">Manage system settings, reset options, and backup/restore functionality.</p>
+          </div>
+          
+          <div>
+            <a href="{{ url_for('admin_system_management') }}" style="display: block; background: #4caf50; color: white; padding: 12px 15px; border-radius: 5px; text-align: center; text-decoration: none; font-weight: bold;">
+              <i class="fa fa-cogs" aria-hidden="true"></i> Go to System Management
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Search Bar -->
@@ -218,6 +252,7 @@
               </th>
               <th style="padding: 8px; border-bottom: 1px solid #ddd">Year</th>
               <th style="padding: 8px; border-bottom: 1px solid #ddd">Email</th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">Remaining Sessions</th>
               <th style="padding: 8px; border-bottom: 1px solid #ddd">
                 Actions
               </th>
@@ -271,6 +306,23 @@
                 "
               >
                 {{ s.email_address }}
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {% set max_sessions = 30 if s.course in ['BSIT', 'BSCS'] else 15 %}
+                {% set used_sessions = s.used_sessions|default(0) %}
+                {% set behavior_points = s.behavior_points|default(0) %}
+                {% set free_sessions = (behavior_points // 3) %}
+                {% set remaining = max_sessions - used_sessions + free_sessions %}
+                {{ remaining }}
+                {% if free_sessions > 0 %}
+                  <span style="color: #4caf50; font-size: 12px;">(+{{ free_sessions }} free)</span>
+                {% endif %}
               </td>
               <td
                 style="
@@ -690,6 +742,10 @@
       closeModal();
     }
   };
+
+  $(document).ready(function () {
+    setupStudentTable();
+  });
 </script>
 
 {% endblock %}

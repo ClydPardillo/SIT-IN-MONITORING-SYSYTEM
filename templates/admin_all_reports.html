@@ -27,6 +27,11 @@
           >
         </li>
         <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
           <a href="{{ url_for('admin_announcements') }}"
             ><i class="fa fa-bullhorn"></i> Announcements</a
           >
@@ -34,6 +39,16 @@
         <li>
           <a href="{{ url_for('admin_reports') }}" class="active"
             ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System Management</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
           >
         </li>
       </ul>
@@ -44,12 +59,27 @@
   <div class="main-content">
     <div class="header">
       <h1>All Student Reports</h1>
-      <a class="Btn" href="{{ url_for('logout') }}">
-        <div class="sign">
-          <i class="fa fa-sign-out" aria-hidden="true"></i>
-        </div>
-        <div class="text">Logout</div>
-      </a>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a
+          href="{{ url_for('admin_reports') }}"
+          class="Btn"
+          style="
+            background-color: #4caf50;
+            margin-right: 10px;
+          "
+        >
+          <div class="sign">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+          </div>
+          <div class="text">Back</div>
+        </a>
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
     </div>
 
     <!-- Analytics Section -->
@@ -82,129 +112,9 @@
       </div>
     </div>
 
-    <!-- Purpose Statistics -->
-    <div class="content-row" style="margin-bottom: 20px">
-      <div class="schedule-card" style="width: 100%">
-        <h4>
-          <i class="fa fa-clipboard-list" aria-hidden="true"></i> Purpose
-          Statistics
-        </h4>
-        <div
-          style="
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-          "
-        >
-          {% for purpose in purpose_stats %}
-          <div
-            style="
-              background: #f8f9fa;
-              padding: 15px;
-              border-radius: 8px;
-              text-align: center;
-            "
-          >
-            <h4 style="margin: 0 0 10px 0; color: #333">
-              {{ purpose.purpose }}
-            </h4>
-            <div
-              style="
-                display: flex;
-                justify-content: center;
-                align-items: center;
-              "
-            >
-              <div
-                style="
-                  width: 40px;
-                  height: 40px;
-                  background: #ff9800;
-                  color: white;
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  margin-right: 10px;
-                "
-              >
-                {{ purpose.count }}
-              </div>
-              <div style="text-align: left">
-                <div style="font-size: 14px; color: #666">Sessions</div>
-                <div style="font-size: 12px; color: #888">
-                  {{ "%.1f"|format(purpose.count / total_sessions * 100) }}%
-                </div>
-              </div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Laboratory Usage Statistics -->
-    <div class="content-row" style="margin-bottom: 20px">
-      <div class="schedule-card" style="width: 100%">
-        <h4>
-          <i class="fa fa-building" aria-hidden="true"></i> Laboratory Usage
-        </h4>
-        <div
-          style="
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-          "
-        >
-          {% for lab in lab_stats %}
-          <div
-            style="
-              background: #f8f9fa;
-              padding: 15px;
-              border-radius: 8px;
-              text-align: center;
-            "
-          >
-            <h4 style="margin: 0 0 10px 0; color: #333">{{ lab.lab }}</h4>
-            <div
-              style="
-                display: flex;
-                justify-content: center;
-                align-items: center;
-              "
-            >
-              <div
-                style="
-                  width: 40px;
-                  height: 40px;
-                  background: #2196f3;
-                  color: white;
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  margin-right: 10px;
-                "
-              >
-                {{ lab.count }}
-              </div>
-              <div style="text-align: left">
-                <div style="font-size: 14px; color: #666">Sessions</div>
-                <div style="font-size: 12px; color: #888">
-                  {{ "%.1f"|format(lab.count / total_sessions * 100) }}%
-                </div>
-              </div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Recent Sessions -->
-    <div class="content-row" style="margin-bottom: 20px">
+    <!-- Data Tables Section -->
+    <div class="content-row">
+      <!-- Recent Sessions -->
       <div class="schedule-card" style="width: 100%">
         <div
           style="
@@ -325,10 +235,8 @@
           </table>
         </div>
       </div>
-    </div>
 
-    <!-- Recent Feedback -->
-    <div class="content-row" style="margin-bottom: 20px">
+      <!-- Recent Feedback -->
       <div class="schedule-card" style="width: 100%">
         <div
           style="
@@ -443,33 +351,6 @@
           </table>
         </div>
       </div>
-    </div>
-
-    <!-- Back to Individual Reports -->
-    <div
-      class="content-row"
-      style="margin-top: 30px; margin-bottom: 40px; text-align: center"
-    >
-      <a
-        href="{{ url_for('admin_reports') }}"
-        class="btn"
-        style="
-          text-decoration: none;
-          background-color: #4caf50;
-          color: white;
-          padding: 12px 24px;
-          border-radius: 4px;
-          font-size: 16px;
-          display: inline-block;
-        "
-      >
-        <i
-          class="fa fa-arrow-left"
-          aria-hidden="true"
-          style="margin-right: 8px"
-        ></i>
-        Back to Individual Reports
-      </a>
     </div>
   </div>
 </div>

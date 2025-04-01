@@ -28,6 +28,11 @@
           >
         </li>
         <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
           <a href="{{ url_for('admin_announcements') }}"
             ><i class="fa fa-bullhorn"></i> Announcements</a
           >
@@ -35,6 +40,16 @@
         <li>
           <a href="{{ url_for('admin_reports') }}" class="active"
             ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System Management</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
           >
         </li>
       </ul>

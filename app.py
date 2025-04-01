@@ -15,6 +15,7 @@ from reportlab.lib.units import inch
 import io
 import xlsxwriter
 import pandas as pd
+import shutil
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key' 
@@ -23,6 +24,23 @@ def get_db_connection():
     conn = sqlite3.connect("users.db")
     conn.row_factory = sqlite3.Row
     return conn
+
+# Create admin_logs table if it doesn't exist
+def create_admin_logs_table():
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS admin_logs (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            admin_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            timestamp DATETIME NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Create the admin logs table when the app starts
+create_admin_logs_table()
 
 @app.after_request
 def add_header(response):
@@ -148,8 +166,22 @@ def dashboard():
     remaining_sessions = max_sessions - used_sessions
     if remaining_sessions < 0:
         remaining_sessions = 0
+        
+    # 5) Calculate behavior points and free sessions
+    behavior_points = conn.execute("""
+        SELECT COALESCE(SUM(behavior_points), 0) as total
+        FROM lab_sessions
+        WHERE student_id = ? AND behavior_points > 0
+    """, (session['user'],)).fetchone()['total']
+    
+    free_sessions = behavior_points // 3
+    points_until_next = 3 - (behavior_points % 3) if behavior_points % 3 > 0 else 0
+    
+    # Add free sessions to remaining sessions
+    if free_sessions > 0:
+        remaining_sessions += free_sessions
 
-    # 5) Get active announcements
+    # 6) Get active announcements
     announcements = conn.execute("""
         SELECT * FROM announcements 
         WHERE is_active = 1 
@@ -157,7 +189,7 @@ def dashboard():
         ORDER BY posted_date DESC
     """).fetchall()
 
-    # 6) Get the next upcoming reservation
+    # 7) Get the next upcoming reservation
     upcoming_reservation = conn.execute("""
         SELECT lr.*, l.room_number, l.building
         FROM lab_reservations lr
@@ -169,7 +201,7 @@ def dashboard():
         LIMIT 1
     """, (session['user'],)).fetchone()
     
-    # 7) Get active session if any
+    # 8) Get active session if any
     active_session = conn.execute("""
         SELECT ls.*, l.room_number, l.building
         FROM lab_sessions ls
@@ -186,7 +218,10 @@ def dashboard():
         reservation=upcoming_reservation,
         active_session=active_session,
         remaining_sessions=remaining_sessions,
-        announcements=announcements
+        announcements=announcements,
+        behavior_points=behavior_points,
+        free_sessions=free_sessions,
+        points_until_next=points_until_next
     )
 
 
@@ -407,8 +442,22 @@ def remaining_sessions():
     remaining_sessions = allocated_sessions - used_sessions
     if remaining_sessions < 0:
         remaining_sessions = 0  # clamp to 0 if they exceed
+        
+    # 5) Calculate behavior points and free sessions
+    behavior_points = conn.execute("""
+        SELECT COALESCE(SUM(behavior_points), 0) as total
+        FROM lab_sessions
+        WHERE student_id = ? AND behavior_points > 0
+    """, (session['user'],)).fetchone()['total']
+    
+    free_sessions = behavior_points // 3
+    points_until_next = 3 - (behavior_points % 3) if behavior_points % 3 > 0 else 0
+    
+    # Add free sessions to remaining sessions
+    if free_sessions > 0:
+        remaining_sessions += free_sessions
 
-    # 5) Retrieve an upcoming reservation (if any)
+    # 6) Retrieve an upcoming reservation (if any)
     reservation = conn.execute("""
         SELECT lr.*, l.room_number, l.building
         FROM lab_reservations lr
@@ -420,7 +469,7 @@ def remaining_sessions():
         LIMIT 1
     """, (session['user'],)).fetchone()
 
-    # 6) Retrieve lab session history
+    # 7) Retrieve lab session history
     sessions = conn.execute("""
         SELECT 
             ls.*,
@@ -439,7 +488,10 @@ def remaining_sessions():
         'remaining_sessions.html',
         remaining_sessions=remaining_sessions,
         reservation=reservation,
-        sessions=sessions
+        sessions=sessions,
+        behavior_points=behavior_points,
+        free_sessions=free_sessions,
+        points_until_next=points_until_next
     )
 
 
@@ -517,12 +569,12 @@ def reservation():
             
             # Create the reservation
             conn.execute("""
-                INSERT INTO lab_reservations (student_id, lab_id, reservation_date, start_time, end_time, status)
-                VALUES (?, ?, ?, ?, ?, 'Pending')
-            """, (student_id, lab_id, reservation_date, start_time, end_time))
+                    INSERT INTO lab_reservations (student_id, lab_id, reservation_date, start_time, end_time, status)
+                    VALUES (?, ?, ?, ?, ?, 'Pending')
+                """, (student_id, lab_id, reservation_date, start_time, end_time))
             conn.commit()
             flash("Reservation submitted successfully!", "success")
-            
+                
         except ValueError:
             flash("Invalid time format.", "danger")
         except sqlite3.Error as e:
@@ -537,18 +589,18 @@ def reservation():
         
         # Get upcoming reservations for the student
         reservations = conn.execute("""
-            SELECT lr.*, l.building, l.room_number, 
-                   CASE 
-                       WHEN lr.status = 'Approved' THEN 'badge-success'
-                       WHEN lr.status = 'Pending' THEN 'badge-warning'
-                       ELSE 'badge-danger'
-                   END as status_badge
-            FROM lab_reservations lr
-            JOIN laboratories l ON lr.lab_id = l.lab_id
-            WHERE lr.student_id = ? 
-            AND (lr.status = 'Pending' OR 
-                 (lr.status = 'Approved' AND lr.reservation_date >= date('now')))
-            ORDER BY lr.reservation_date ASC, lr.start_time ASC
+                SELECT lr.*, l.building, l.room_number, 
+                    CASE 
+                        WHEN lr.status = 'Approved' THEN 'badge-success'
+                        WHEN lr.status = 'Pending' THEN 'badge-warning'
+                        ELSE 'badge-danger'
+                    END as status_badge
+                FROM lab_reservations lr
+                JOIN laboratories l ON lr.lab_id = l.lab_id
+                WHERE lr.student_id = ? 
+                AND (lr.status = 'Pending' OR 
+                    (lr.status = 'Approved' AND lr.reservation_date >= date('now')))
+                ORDER BY lr.reservation_date ASC, lr.start_time ASC
         """, (session['user'],)).fetchall()
         
     except sqlite3.Error as e:
@@ -584,11 +636,35 @@ def admin_dashboard():
         total_sit_ins = conn.execute("SELECT COUNT(*) as count FROM lab_sessions WHERE status = 'Completed'").fetchone()['count']
         
         # Fetch all students with their details
-        students = conn.execute("""
+        students_basic = conn.execute("""
             SELECT idno, lastname, firstname, midname, course, year_level, email_address 
             FROM students 
             ORDER BY lastname, firstname
         """).fetchall()
+        
+        # Convert to list of dictionaries for modification
+        students = []
+        for student in students_basic:
+            # Create a mutable dictionary from the row
+            student_dict = dict(student)
+            
+            # Get used sessions count
+            used_sessions = conn.execute("""
+                SELECT COUNT(*) as count 
+                FROM lab_sessions 
+                WHERE student_id = ? AND status = 'Completed'
+            """, (student['idno'],)).fetchone()['count']
+            student_dict['used_sessions'] = used_sessions
+            
+            # Get total behavior points
+            behavior_points = conn.execute("""
+                SELECT COALESCE(SUM(behavior_points), 0) as total_points
+                FROM lab_sessions 
+                WHERE student_id = ? AND behavior_points > 0
+            """, (student['idno'],)).fetchone()['total_points']
+            student_dict['behavior_points'] = behavior_points
+            
+            students.append(student_dict)
         
         # Fetch all available laboratories
         labs = conn.execute("""
@@ -600,7 +676,7 @@ def admin_dashboard():
         
         # Close the connection
         conn.close()
-        
+
         # Render admin template with student and lab data
         return render_template('admin.html', 
                              students=students, 
@@ -841,6 +917,7 @@ def admin_current_sit_in():
         # Fetch all active sessions with student details
         active_sessions = conn.execute("""
             SELECT 
+                ls.session_id,
                 s.idno,
                 s.lastname,
                 s.firstname,
@@ -850,7 +927,8 @@ def admin_current_sit_in():
                 ls.check_in_time,
                 ls.notes as purpose,
                 l.room_number,
-                l.building
+                l.building,
+                ls.behavior_points
             FROM lab_sessions ls
             JOIN students s ON ls.student_id = s.idno
             JOIN laboratories l ON ls.lab_id = l.lab_id
@@ -935,6 +1013,7 @@ def admin_sit_in_records():
         # Fetch all completed sessions with student details
         completed_sessions = conn.execute("""
             SELECT 
+                ls.session_id,
                 s.idno,
                 s.lastname,
                 s.firstname,
@@ -947,6 +1026,7 @@ def admin_sit_in_records():
                 ls.notes as purpose,
                 l.room_number,
                 l.building,
+                ls.behavior_points,
                 ROUND(CAST((julianday(ls.check_out_time) - julianday(ls.check_in_time)) * 24 AS REAL), 2) as duration
             FROM lab_sessions ls
             JOIN students s ON ls.student_id = s.idno
@@ -1695,7 +1775,7 @@ def export_feedback_pdf(student_id):
                 laboratory,
                 feedback_dict['date'],
                 stars,
-                feedback_dict['comments']
+                feedback_dict['comments'] or ""
             ])
         
         # Create the table with the data
@@ -2550,6 +2630,379 @@ def admin_edit_student(student_id):
             flash("Student not found.", "danger")
             return redirect(url_for('admin_dashboard'))
         return render_template('admin_edit_student.html', student=student)
+
+@app.route('/admin/feedback')
+def admin_feedback():
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash("Please log in as an administrator.", "warning")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    # Get all feedback with student and lab details
+    feedback = conn.execute("""
+        SELECT sf.*, s.firstname, s.lastname, s.course, s.year_level, 
+               l.building, l.room_number, ls.check_in_time,
+               DATE(ls.check_in_time) as date
+        FROM session_feedback sf
+        JOIN students s ON sf.student_id = s.idno
+        JOIN lab_sessions ls ON sf.session_id = ls.session_id
+        JOIN laboratories l ON ls.lab_id = l.lab_id
+        ORDER BY ls.check_in_time DESC
+    """).fetchall()
+    
+    # Calculate statistics
+    total_feedback = len(feedback)
+    
+    # Calculate average rating
+    if total_feedback > 0:
+        avg_rating = conn.execute("""
+            SELECT AVG(rating) as avg_rating FROM session_feedback
+        """).fetchone()['avg_rating']
+    else:
+        avg_rating = 0
+    
+    # Get rating distribution
+    rating_distribution = []
+    for rating in range(1, 6):
+        count = conn.execute("""
+            SELECT COUNT(*) as count FROM session_feedback
+            WHERE rating = ?
+        """, (rating,)).fetchone()['count']
+        rating_distribution.append({'rating': rating, 'count': count})
+    
+    conn.close()
+    
+    return render_template(
+        'admin_feedback.html',
+        feedback=feedback,
+        total_feedback=total_feedback,
+        avg_rating=avg_rating,
+        rating_distribution=rating_distribution
+    )
+
+@app.route('/admin/leaderboard')
+def admin_leaderboard():
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash("Please log in as an administrator.", "warning")
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    
+    # Get top 10 most active students (by completed session count)
+    most_active_students = conn.execute("""
+        SELECT 
+            s.idno, s.firstname, s.lastname, s.course, s.year_level, s.image_path,
+            COUNT(ls.session_id) as session_count
+        FROM students s
+        JOIN lab_sessions ls ON s.idno = ls.student_id
+        WHERE ls.status = 'Completed'
+        GROUP BY s.idno
+        ORDER BY session_count DESC
+        LIMIT 10
+    """).fetchall()
+    
+    # Get top 10 students with the most behavior points
+    top_performers = conn.execute("""
+        SELECT 
+            s.idno, s.firstname, s.lastname, s.course, s.year_level, s.image_path,
+            COALESCE(SUM(ls.behavior_points), 0) as behavior_points
+        FROM students s
+        LEFT JOIN lab_sessions ls ON s.idno = ls.student_id AND ls.behavior_points > 0
+        GROUP BY s.idno
+        HAVING behavior_points > 0
+        ORDER BY behavior_points DESC
+        LIMIT 10
+    """).fetchall()
+    
+    # Calculate free sessions for each top performer
+    top_performers_list = []
+    for student in top_performers:
+        student_dict = dict(student)
+        student_dict['free_sessions'] = student_dict['behavior_points'] // 3
+        top_performers_list.append(student_dict)
+    
+    conn.close()
+    
+    return render_template(
+        'admin_leaderboard.html',
+        most_active_students=most_active_students,
+        top_performers=top_performers_list
+    )
+
+@app.route('/admin/award_behavior_point/<int:session_id>')
+def award_behavior_point(session_id):
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        
+        # Check if the session exists
+        session_data = conn.execute("SELECT * FROM lab_sessions WHERE session_id = ?", (session_id,)).fetchone()
+        
+        if not session_data:
+            flash("Session not found.", "danger")
+            return redirect(url_for('admin_sit_in_records'))
+        
+        # Check if the student already has a behavior point for this session
+        existing_point = conn.execute(
+            "SELECT behavior_points FROM lab_sessions WHERE session_id = ?", 
+            (session_id,)
+        ).fetchone()
+        
+        if existing_point and existing_point['behavior_points']:
+            flash("This student has already been awarded a behavior point for this session.", "warning")
+        else:
+            # Award the behavior point
+            conn.execute(
+                "UPDATE lab_sessions SET behavior_points = 1 WHERE session_id = ?",
+                (session_id,)
+            )
+            conn.commit()
+            
+            # Get student info and calculate total points
+            student_info = conn.execute("""
+                SELECT s.idno, s.firstname, s.lastname
+                FROM lab_sessions ls
+                JOIN students s ON ls.student_id = s.idno
+                WHERE ls.session_id = ?
+            """, (session_id,)).fetchone()
+            
+            student_name = f"{student_info['firstname']} {student_info['lastname']}" if student_info else "Student"
+            
+            # Calculate total behavior points for the student
+            if student_info:
+                total_points = conn.execute("""
+                    SELECT COALESCE(SUM(behavior_points), 0) as total
+                    FROM lab_sessions
+                    WHERE student_id = ? AND behavior_points > 0
+                """, (student_info['idno'],)).fetchone()['total']
+                
+                # Check if student has reached a multiple of 3 points
+                if total_points > 0 and total_points % 3 == 0:
+                    free_sessions = total_points // 3
+                    flash(f"Behavior point awarded to {student_name} successfully! They now have {total_points} points, earning them {free_sessions} free session(s)!", "success")
+                else:
+                    points_to_next_free = 3 - (total_points % 3)
+                    flash(f"Behavior point awarded to {student_name} successfully! They now have {total_points} points. {points_to_next_free} more points needed for another free session.", "success")
+            else:
+                flash(f"Behavior point awarded successfully!", "success")
+        
+        # Determine which page to redirect to based on the session status
+        if session_data['status'] == 'Active':
+            return redirect(url_for('admin_current_sit_in'))
+        else:
+            return redirect(url_for('admin_sit_in_records'))
+            
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_dashboard'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/reset_sessions')
+def admin_reset_sessions():
+    """Reset all students' remaining sessions to default values based on their course."""
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Delete all completed lab sessions
+        conn.execute("DELETE FROM lab_sessions WHERE status = 'Completed'")
+        
+        # Log the action
+        conn.execute("""
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, 'Reset all student sessions', datetime('now'))
+        """, (session['user'],))
+        
+        conn.commit()
+        conn.close()
+        
+        flash("All student sessions have been reset to their default values.", "success")
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+    
+    return redirect(url_for('admin_system_management'))
+
+@app.route('/admin/reset_points')
+def admin_reset_points():
+    """Reset all behavior points for all students."""
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Set all behavior points to 0
+        conn.execute("UPDATE lab_sessions SET behavior_points = 0 WHERE behavior_points > 0")
+        
+        # Log the action
+        conn.execute("""
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, 'Reset all behavior points', datetime('now'))
+        """, (session['user'],))
+        
+        conn.commit()
+        conn.close()
+        
+        flash("All student behavior points have been reset.", "success")
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+    
+    return redirect(url_for('admin_system_management'))
+
+@app.route('/admin/reset_all')
+def admin_reset_all():
+    """Reset both sessions and behavior points for all students."""
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Delete all completed lab sessions (automatically removes their behavior points)
+        conn.execute("DELETE FROM lab_sessions WHERE status = 'Completed'")
+        
+        # Also reset behavior points for any active sessions
+        conn.execute("UPDATE lab_sessions SET behavior_points = 0 WHERE behavior_points > 0")
+        
+        # Log the action
+        conn.execute("""
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, 'Reset all student data (sessions and points)', datetime('now'))
+        """, (session['user'],))
+        
+        conn.commit()
+        conn.close()
+        
+        flash("All student data (sessions and behavior points) has been reset.", "success")
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+    
+    return redirect(url_for('admin_system_management'))
+
+@app.route('/admin/system')
+def admin_system_management():
+    """Admin system management page."""
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    return render_template('admin_system_management.html')
+
+@app.route('/admin/backup_database')
+def admin_backup_database():
+    """Download a backup of the database."""
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        # Create a copy of the database file
+        import os
+        import shutil
+        from datetime import datetime
+        import io
+        
+        # Get the database file path
+        db_path = 'users.db'
+        
+        # Create a backup file name with timestamp
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+        backup_filename = f"backup_{timestamp}.db"
+        
+        # Read the database file into memory
+        with open(db_path, 'rb') as f:
+            db_data = f.read()
+        
+        # Create a memory file-like object
+        memory_file = io.BytesIO(db_data)
+        memory_file.seek(0)
+        
+        # Log the action
+        conn = get_db_connection()
+        conn.execute("""
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, 'Database backup created', datetime('now'))
+        """, (session['user'],))
+        conn.commit()
+        conn.close()
+        
+        # Send the file as download attachment
+        return send_file(
+            memory_file,
+            mimetype='application/octet-stream',
+            as_attachment=True,
+            download_name=backup_filename
+        )
+    except Exception as e:
+        flash(f"Error creating database backup: {str(e)}", "danger")
+        return redirect(url_for('admin_system_management'))
+
+@app.route('/admin/restore_database', methods=['POST'])
+def admin_restore_database():
+    """Restore the database from a backup file."""
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    if 'database_file' not in request.files:
+        flash("No file selected for upload.", "warning")
+        return redirect(url_for('admin_system_management'))
+    
+    file = request.files['database_file']
+    
+    if file.filename == '':
+        flash("No file selected for upload.", "warning")
+        return redirect(url_for('admin_system_management'))
+    
+    try:
+        import os
+        import shutil
+        from datetime import datetime
+        
+        # Get the database file path
+        db_path = 'users.db'
+        
+        # Create a backup of the current database before replacing it
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = f"auto_backup_before_restore_{timestamp}.db"
+        shutil.copy2(db_path, backup_path)
+        
+        # Save the uploaded file as the new database
+        file.save(db_path)
+        
+        # No need to log in the restored database as it might not have the same schema
+        # but we can try
+        try:
+            conn = get_db_connection()
+            conn.execute("""
+                INSERT INTO admin_logs (admin_id, action, timestamp)
+                VALUES (?, 'Database restored from backup', datetime('now'))
+            """, (session['user'],))
+            conn.commit()
+            conn.close()
+        except:
+            # If this fails, it's not critical - the restore already happened
+            pass
+        
+        flash("Database successfully restored from backup file.", "success")
+    except Exception as e:
+        flash(f"Error restoring database: {str(e)}", "danger")
+    
+    return redirect(url_for('admin_system_management'))
 
 if __name__ == '__main__':
     app.run(debug=True)

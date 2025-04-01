@@ -27,6 +27,11 @@
           >
         </li>
         <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
           <a href="{{ url_for('admin_announcements') }}"
             ><i class="fa fa-bullhorn"></i> Announcements</a
           >
@@ -34,6 +39,16 @@
         <li>
           <a href="{{ url_for('admin_reports') }}" class="active"
             ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System Management</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
           >
         </li>
       </ul>
@@ -265,6 +280,9 @@
               <th style="padding: 8px; border-bottom: 1px solid #ddd">
                 Duration
               </th>
+              <th style="padding: 8px; border-bottom: 1px solid #ddd">
+                Behavior Points
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -351,6 +369,33 @@
                 "
               >
                 {{ session.duration }} hrs
+              </td>
+              <td
+                style="
+                  padding: 8px;
+                  border-bottom: 1px solid #ddd;
+                  text-align: center;
+                "
+              >
+                {% if session.behavior_points %}
+                  <span style="color: #4caf50; font-weight: bold;">✓ {{ session.behavior_points }} point</span>
+                {% else %}
+                  <a
+                    href="{{ url_for('award_behavior_point', session_id=session.session_id) }}"
+                    class="btn btn-sm"
+                    style="
+                      padding: 5px 10px;
+                      text-decoration: none;
+                      color: white;
+                      background-color: #4caf50;
+                      border-radius: 4px;
+                      font-size: 12px;
+                    "
+                    onclick="return confirm('Award 1 behavior point to this student for good lab usage?')"
+                  >
+                    Award Point
+                  </a>
+                {% endif %}
               </td>
             </tr>
             {% endfor %}

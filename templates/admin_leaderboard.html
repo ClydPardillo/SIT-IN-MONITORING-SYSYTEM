@@ -1,0 +1,243 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-angle-left"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('admin_dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Admin Dashboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}"
+            ><i class="fa fa-users"></i> Current Sit-In</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            ><i class="fa fa-list-alt"></i> View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_leaderboard') }}" class="active"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}"
+            ><i class="fa fa-bullhorn"></i> Announcements</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}"
+            ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System Management</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
+          >
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Student Leaderboard</h1>
+      <a class="Btn" href="{{ url_for('logout') }}">
+        <div class="sign">
+          <i class="fa fa-sign-out" aria-hidden="true"></i>
+        </div>
+        <div class="text">Logout</div>
+      </a>
+    </div>
+
+    <!-- Leaderboard Overview -->
+    <div class="content-row" style="margin-bottom: 20px">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i class="fa fa-info-circle" aria-hidden="true" style="margin-right: 5px"></i>
+          About the Leaderboard
+        </h4>
+        <p style="margin-top: 10px; color: #555;">
+          The leaderboard showcases our most active and top-performing students in the laboratory. 
+          Students earn positions based on their participation (number of completed sessions) and their behavior points earned for following lab rules and demonstrating excellent conduct.
+        </p>
+      </div>
+    </div>
+
+    <!-- Most Active Students Leaderboard -->
+    <div class="content-row">
+      <div class="schedule-card" style="flex: 1; margin-right: 15px">
+        <h4>
+          <i class="fa fa-bolt" aria-hidden="true" style="margin-right: 5px"></i>
+          Most Active Students
+        </h4>
+        
+        {% if most_active_students %}
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr style="background-color: #f8f9fa">
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">Rank</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Student</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Course & Year</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">
+                  Completed Sessions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for student in most_active_students %}
+              <tr class="{% if loop.index <= 3 %}highlight-row{% endif %}">
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center">
+                  {% if loop.index == 1 %}
+                  <i class="fa fa-trophy" style="color: gold; font-size: 1.2em;"></i>
+                  {% elif loop.index == 2 %}
+                  <i class="fa fa-trophy" style="color: silver; font-size: 1.2em;"></i>
+                  {% elif loop.index == 3 %}
+                  <i class="fa fa-trophy" style="color: #cd7f32; font-size: 1.2em;"></i>
+                  {% else %}
+                  {{ loop.index }}
+                  {% endif %}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  <div style="display: flex; align-items: center;">
+                    {% if student.image_path %}
+                    <img src="{{ url_for('static', filename=student.image_path) }}" 
+                         style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; object-fit: cover;">
+                    {% else %}
+                    <div style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; background: #e0e0e0; display: flex; align-items: center; justify-content: center;">
+                      <i class="fa fa-user" style="color: #555;"></i>
+                    </div>
+                    {% endif %}
+                    <div>
+                      <div><strong>{{ student.firstname }} {{ student.lastname }}</strong></div>
+                      <div style="font-size: 0.85em; color: #666;">{{ student.idno }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ student.course }} - {{ student.year_level }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center; font-weight: bold;">
+                  {{ student.session_count }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 30px; color: #666">
+          <i class="fa fa-info-circle" style="font-size: 2em; color: #4caf50; margin-bottom: 15px"></i>
+          <p>No student activity data available yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Top Performers by Behavior Points -->
+    <div class="content-row" style="margin-top: 30px">
+      <div class="schedule-card" style="flex: 1;">
+        <h4>
+          <i class="fa fa-star" aria-hidden="true" style="margin-right: 5px"></i>
+          Top Performers by Behavior Points
+        </h4>
+        
+        {% if top_performers %}
+        <div style="overflow-x: auto">
+          <table style="width: 100%; border-collapse: collapse">
+            <thead>
+              <tr style="background-color: #f8f9fa">
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">Rank</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Student</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Course & Year</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">
+                  Behavior Points
+                </th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">
+                  Free Sessions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for student in top_performers %}
+              <tr class="{% if loop.index <= 3 %}highlight-row{% endif %}">
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center">
+                  {% if loop.index == 1 %}
+                  <i class="fa fa-trophy" style="color: gold; font-size: 1.2em;"></i>
+                  {% elif loop.index == 2 %}
+                  <i class="fa fa-trophy" style="color: silver; font-size: 1.2em;"></i>
+                  {% elif loop.index == 3 %}
+                  <i class="fa fa-trophy" style="color: #cd7f32; font-size: 1.2em;"></i>
+                  {% else %}
+                  {{ loop.index }}
+                  {% endif %}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  <div style="display: flex; align-items: center;">
+                    {% if student.image_path %}
+                    <img src="{{ url_for('static', filename=student.image_path) }}" 
+                         style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; object-fit: cover;">
+                    {% else %}
+                    <div style="width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; background: #e0e0e0; display: flex; align-items: center; justify-content: center;">
+                      <i class="fa fa-user" style="color: #555;"></i>
+                    </div>
+                    {% endif %}
+                    <div>
+                      <div><strong>{{ student.firstname }} {{ student.lastname }}</strong></div>
+                      <div style="font-size: 0.85em; color: #666;">{{ student.idno }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                  {{ student.course }} - {{ student.year_level }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center; font-weight: bold;">
+                  {{ student.behavior_points }}
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center;">
+                  {{ student.free_sessions }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="text-align: center; padding: 30px; color: #666">
+          <i class="fa fa-info-circle" style="font-size: 2em; color: #4caf50; margin-bottom: 15px"></i>
+          <p>No behavior points data available yet.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .highlight-row {
+    background-color: #f7fff7;
+  }
+  .highlight-row:hover {
+    background-color: #f0fff0;
+  }
+</style>
+
+{% endblock %} 
