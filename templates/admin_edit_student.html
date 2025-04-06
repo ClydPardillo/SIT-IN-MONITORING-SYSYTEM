@@ -7,13 +7,13 @@
     <div class="sidebar-header">
       <h2>UC - Admin</h2>
       <button class="sidebar-inner-toggle" title="Toggle Sidebar">
-        <i class="fa fa-angle-left"></i>
+        <i class="fa fa-bars"></i>
       </button>
     </div>
     <div class="sidebar-menu">
       <ul>
         <li>
-          <a href="{{ url_for('admin_dashboard') }}"
+          <a href="{{ url_for('admin_dashboard') }}" class="active"
             ><i class="fa fa-dashboard"></i> Admin Dashboard</a
           >
         </li>
@@ -38,18 +38,18 @@
           >
         </li>
         <li>
-          <a href="{{ url_for('admin_reports') }}" class="active"
+          <a href="{{ url_for('admin_reports') }}"
             ><i class="fa fa-file-text"></i> Generate Reports</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_system_management') }}"
-            ><i class="fa fa-cogs"></i> System Management</a
           >
         </li>
         <li>
           <a href="{{ url_for('admin_feedback') }}"
             ><i class="fa fa-comments"></i> View Feedback</a
+          >
+        </li>
+        <li style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System</a
           >
         </li>
       </ul>

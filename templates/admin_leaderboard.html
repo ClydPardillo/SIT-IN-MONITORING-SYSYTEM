@@ -6,7 +6,7 @@
     <div class="sidebar-header">
       <h2>UC - Admin</h2>
       <button class="sidebar-inner-toggle" title="Toggle Sidebar">
-        <i class="fa fa-angle-left"></i>
+        <i class="fa fa-bars"></i>
       </button>
     </div>
     <div class="sidebar-menu">
@@ -42,13 +42,13 @@
           >
         </li>
         <li>
-          <a href="{{ url_for('admin_system_management') }}"
-            ><i class="fa fa-cogs"></i> System Management</a
-          >
-        </li>
-        <li>
           <a href="{{ url_for('admin_feedback') }}"
             ><i class="fa fa-comments"></i> View Feedback</a
+          >
+        </li>
+        <li style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System</a
           >
         </li>
       </ul>
@@ -96,7 +96,7 @@
               <tr style="background-color: #f8f9fa">
                 <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">Rank</th>
                 <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Student</th>
-                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Course & Year</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">Course & Year</th>
                 <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">
                   Completed Sessions
                 </th>
@@ -132,7 +132,7 @@
                     </div>
                   </div>
                 </td>
-                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center;">
                   {{ student.course }} - {{ student.year_level }}
                 </td>
                 <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center; font-weight: bold;">
@@ -167,7 +167,7 @@
               <tr style="background-color: #f8f9fa">
                 <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">Rank</th>
                 <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Student</th>
-                <th style="padding: 12px; border-bottom: 2px solid #dee2e6">Course & Year</th>
+                <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">Course & Year</th>
                 <th style="padding: 12px; border-bottom: 2px solid #dee2e6; text-align: center">
                   Behavior Points
                 </th>
@@ -206,7 +206,7 @@
                     </div>
                   </div>
                 </td>
-                <td style="padding: 12px; border-bottom: 1px solid #dee2e6">
+                <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center;">
                   {{ student.course }} - {{ student.year_level }}
                 </td>
                 <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center; font-weight: bold;">
