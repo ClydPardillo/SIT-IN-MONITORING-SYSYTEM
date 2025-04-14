@@ -3004,5 +3004,120 @@ def admin_restore_database():
     
     return redirect(url_for('admin_system_management'))
 
+@app.route('/api/search_student', methods=['POST'])
+def search_student():
+    """API endpoint to search for a student by ID or name."""
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({'success': False, 'message': 'Access denied. Admin privileges required.'}), 403
+    
+    search_query = request.json.get('query', '').strip()
+    
+    if not search_query:
+        return jsonify({'success': False, 'message': 'Search query is required'}), 400
+    
+    try:
+        conn = get_db_connection()
+        
+        # Search by ID or name (case-insensitive)
+        students = conn.execute("""
+            SELECT * FROM students 
+            WHERE idno = ? 
+            OR LOWER(firstname || ' ' || lastname) LIKE LOWER(?)
+            OR LOWER(lastname || ' ' || firstname) LIKE LOWER(?)
+            LIMIT 1
+        """, (search_query, f'%{search_query}%', f'%{search_query}%')).fetchall()
+        
+        if not students:
+            return jsonify({'success': False, 'message': 'No student found with the provided ID or name'}), 404
+        
+        student = dict(students[0])
+        
+        # Calculate remaining sessions
+        if student['course'] in ("BSIT", "BSCS"):
+            max_sessions = 30
+        else:
+            max_sessions = 15
+            
+        # Count completed lab sessions
+        used_sessions = conn.execute("""
+            SELECT COUNT(*) as c 
+            FROM lab_sessions 
+            WHERE student_id = ? AND status = 'Completed'
+        """, (student['idno'],)).fetchone()['c']
+        
+        # Calculate remaining sessions
+        remaining_sessions = max_sessions - used_sessions
+        if remaining_sessions < 0:
+            remaining_sessions = 0
+            
+        # Calculate behavior points and free sessions
+        behavior_points = conn.execute("""
+            SELECT COALESCE(SUM(behavior_points), 0) as total
+            FROM lab_sessions
+            WHERE student_id = ? AND behavior_points > 0
+        """, (student['idno'],)).fetchone()['total']
+        
+        free_sessions = behavior_points // 3
+        
+        # Add free sessions to remaining sessions
+        total_remaining = remaining_sessions + free_sessions
+        
+        # Add computed fields to student data
+        student['remaining_sessions'] = remaining_sessions
+        student['behavior_points'] = behavior_points
+        student['free_sessions'] = free_sessions
+        student['total_remaining'] = total_remaining
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'student': student
+        })
+        
+    except sqlite3.Error as e:
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
+@app.route('/admin/reset_student_session', methods=['POST'])
+def admin_reset_student_session():
+    """Reset sessions for a specific student."""
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({'success': False, 'message': 'Access denied. Admin privileges required.'}), 403
+    
+    student_id = request.json.get('student_id')
+    
+    if not student_id:
+        return jsonify({'success': False, 'message': 'Student ID is required'}), 400
+    
+    try:
+        conn = get_db_connection()
+        
+        # Verify the student exists
+        student = conn.execute("SELECT * FROM students WHERE idno = ?", (student_id,)).fetchone()
+        
+        if not student:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Student not found'}), 404
+        
+        # Delete all completed lab sessions for this student
+        conn.execute("DELETE FROM lab_sessions WHERE student_id = ? AND status = 'Completed'", (student_id,))
+        
+        # Log the action
+        conn.execute("""
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, ?, datetime('now'))
+        """, (session['user'], f'Reset sessions for student {student_id}'))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f"Sessions reset successfully for student {student_id}"
+        })
+        
+    except sqlite3.Error as e:
+        return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)

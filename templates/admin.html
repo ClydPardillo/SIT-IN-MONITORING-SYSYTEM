@@ -347,6 +347,24 @@
                 >
                   <i class="fa fa-pencil" aria-hidden="true"></i> Edit
                 </a>
+                <button
+                  onclick="resetStudentSession('{{ s.idno }}', '{{ s.lastname }}, {{ s.firstname }}{% if s.midname %} {{ s.midname }}{% endif %}')"
+                  class="btn btn-sm btn-danger"
+                  style="
+                    text-decoration: none;
+                    padding: 4px 8px;
+                    background-color: #4285f4;
+                    color: white;
+                    border-radius: 4px;
+                    display: inline-block;
+                    font-size: 12px;
+                    border: none;
+                    cursor: pointer;
+                    margin-left: 5px;
+                  "
+                >
+                  <i class="fa fa-refresh" aria-hidden="true"></i> Reset
+                </button>
               </td>
             </tr>
             {% endfor %}
@@ -733,6 +751,45 @@
         console.error("Error:", error);
         alert("Error starting session");
       });
+  }
+
+  // Reset a student's sessions
+  function resetStudentSession(studentId, studentName) {
+    if (confirm(`Are you sure you want to reset sessions for ${studentName}?`)) {
+      // Show loading indicator
+      const resetButton = event.target.closest('button');
+      const originalText = resetButton.innerHTML;
+      resetButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+      resetButton.disabled = true;
+      
+      // Make API call to reset student sessions
+      fetch('/admin/reset_student_session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ student_id: studentId })
+      })
+      .then(response => response.json())
+      .then(data => {
+        resetButton.disabled = false;
+        resetButton.innerHTML = originalText;
+        
+        if (data.success) {
+          alert(`Sessions reset successfully for ${studentName}`);
+          // Refresh the page to update the session counts
+          window.location.reload();
+        } else {
+          alert(`Error: ${data.message || 'Unknown error'}`);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        resetButton.disabled = false;
+        resetButton.innerHTML = originalText;
+        alert('An error occurred while resetting sessions. Please try again.');
+      });
+    }
   }
 
   // Close modal when clicking outside
