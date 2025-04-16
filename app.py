@@ -8,7 +8,7 @@ from io import StringIO, BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
@@ -16,6 +16,9 @@ import io
 import xlsxwriter
 import pandas as pd
 import shutil
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.platypus import Image
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key' 
@@ -1586,14 +1589,14 @@ def export_sessions_pdf(student_id):
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Create the PDF document
+        # Create the PDF document - use landscape for better fit
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=letter,
-            rightMargin=72,
-            leftMargin=72,
-            topMargin=72,
-            bottomMargin=72
+            pagesize=landscape(letter),
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
         )
         
         # Container for the 'Flowable' objects
@@ -1611,14 +1614,50 @@ def export_sessions_pdf(student_id):
             alignment=1  # center alignment
         )
         
+        # Add the header with logos
+        header_data = [
+            [
+                # UC Logo
+                Image(os.path.join('static', 'images', 'uc_logo.png'), width=0.8*inch, height=0.8*inch),
+                [
+                    Paragraph("University of Cebu - Main Campus", 
+                               ParagraphStyle('Header1', parent=styles['Heading2'], alignment=1)),
+                    Paragraph("College of Computer Studies", 
+                               ParagraphStyle('Header2', parent=styles['Heading3'], alignment=1)),
+                    Paragraph("LABORATORY SIT-IN MONITORING SYSTEM REPORT", 
+                               ParagraphStyle('Header3', parent=styles['Heading4'], alignment=1, spaceBefore=6))
+                ],
+                # CCS Logo
+                Image(os.path.join('static', 'images', 'ccs_logo.png'), width=0.8*inch, height=0.8*inch)
+            ]
+        ]
+        header_table = Table(header_data, colWidths=[1.2*inch, 8*inch, 1.2*inch])
+        header_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (1, 0), (1, 0), colors.white),
+        ]))
+        
+        elements.append(header_table)
+        elements.append(Spacer(1, 20))
+        
         # Add title
         title = Paragraph(f"Sit-in Sessions Report - {student['lastname']}, {student['firstname']}", title_style)
         elements.append(title)
         elements.append(Spacer(1, 12))
         
+        # Create paragraph style for table cells to allow word wrapping
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10,  # Line spacing
+            wordWrap='CJK'  # Enable word wrapping
+        )
+        
         # Define table data
         data = []
-        # Add header row
+        # Add header row with better column names
         headers = ['ID No.', 'Name', 'Purpose', 'Laboratory', 'Check-in', 'Check-out', 'Date', 'Duration']
         data.append(headers)
         
@@ -1628,44 +1667,94 @@ def export_sessions_pdf(student_id):
             name = f"{session_dict['lastname']}, {session_dict['firstname']} {session_dict['midname'] or ''}"
             laboratory = f"{session_dict['building']} - Room {session_dict['room_number']}"
             
+            # Format times for better display
+            check_in = format_time(session_dict['check_in_time'])
+            check_out = format_time(session_dict['check_out_time'])
+            
+            # Wrap purpose text in Paragraph for auto-wrapping
+            purpose = Paragraph(session_dict['purpose'] or "", cell_style)
+            name_para = Paragraph(name, cell_style)
+            lab_para = Paragraph(laboratory, cell_style)
+            
             data.append([
                 session_dict['idno'],
-                name,
-                session_dict['purpose'],
-                laboratory,
-                session_dict['check_in_time'],
-                session_dict['check_out_time'],
+                name_para,
+                purpose,
+                lab_para,
+                check_in,
+                check_out,
                 session_dict['date'],
                 f"{session_dict['duration']} hrs"
             ])
         
+        # Optimize column widths
+        col_widths = [
+            0.8*inch,      # ID No
+            1.5*inch,      # Name
+            2.0*inch,      # Purpose (wider for text wrapping)
+            1.5*inch,      # Laboratory
+            0.9*inch,      # Check-in
+            0.9*inch,      # Check-out
+            0.9*inch,      # Date
+            0.8*inch       # Duration
+        ]
+        
         # Create the table with the data
-        table = Table(data, colWidths=[1*inch, 2*inch, 1.5*inch, 1.5*inch, 1.2*inch, 1.2*inch, 1*inch, 1*inch])
+        table = Table(data, colWidths=col_widths, repeatRows=1)
         
         # Add style to the table
         style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header row styling
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkgreen),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            
+            # Data rows styling - alternating colors
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            
+            # Column alignments
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ID column
+            ('ALIGN', (4, 1), (7, -1), 'CENTER'),  # Time, date, duration columns
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            
+            # Grid styling
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            
+            # Cell padding
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ])
+        
+        # Add alternating row colors
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.add('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
+        
         table.setStyle(style)
         
         # Add the table to the elements
         elements.append(table)
         
-        # Build the PDF
-        doc.build(elements)
+        # Add footer with page numbers
+        def add_page_number(canvas, doc):
+            page_num = canvas.getPageNumber()
+            text = f"Page {page_num}"
+            canvas.setFont("Helvetica", 8)
+            canvas.drawRightString(doc.width + doc.rightMargin - 10, doc.bottomMargin - 20, text)
+            canvas.drawString(doc.leftMargin, doc.bottomMargin - 20, 
+                              f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Build the PDF with page numbers
+        doc.build(elements, onFirstPage=add_page_number, onLaterPages=add_page_number)
         
         # Get the value of the BytesIO buffer
         pdf_data = buffer.getvalue()
@@ -1673,7 +1762,7 @@ def export_sessions_pdf(student_id):
         
         # Create the response
         response = make_response(pdf_data)
-        response.headers['Content-Disposition'] = f'attachment; filename=sit_in_sessions_{student['lastname']}_{student['firstname']}_{datetime.now().strftime("%Y-%m-%d")}.pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=sit_in_sessions_{student["lastname"]}_{student["firstname"]}_{datetime.now().strftime("%Y-%m-%d")}.pdf'
         response.headers['Content-Type'] = 'application/pdf'
         
         return response
@@ -1694,7 +1783,7 @@ def export_feedback_pdf(student_id):
         
         # Get student info for filename and header
         student = conn.execute("""
-            SELECT lastname, firstname 
+            SELECT lastname, firstname, course, year_level
             FROM students 
             WHERE idno = ?
         """, (student_id,)).fetchone()
@@ -1703,7 +1792,7 @@ def export_feedback_pdf(student_id):
             flash("Student not found.", "danger")
             return redirect(url_for('admin_reports'))
         
-        # Get student's feedback
+        # Get student's feedback submissions
         feedback = conn.execute("""
             SELECT 
                 s.idno,
@@ -1726,14 +1815,14 @@ def export_feedback_pdf(student_id):
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Create the PDF document
+        # Create the PDF document - use landscape for better fit
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=letter,
-            rightMargin=72,
-            leftMargin=72,
-            topMargin=72,
-            bottomMargin=72
+            pagesize=landscape(letter),
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
         )
         
         # Container for the 'Flowable' objects
@@ -1751,61 +1840,148 @@ def export_feedback_pdf(student_id):
             alignment=1  # center alignment
         )
         
-        # Add title
+        # Define cell style for wrapping text
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10
+        )
+        
+        # Add the header with logos
+        header_data = [
+            [
+                # UC Logo
+                Image(os.path.join('static', 'images', 'uc_logo.png'), width=0.7*inch, height=0.7*inch),
+                [
+                    Paragraph("University of Cebu - Main Campus", 
+                               ParagraphStyle('Header1', parent=styles['Heading2'], alignment=1, fontSize=12)),
+                    Paragraph("College of Computer Studies", 
+                               ParagraphStyle('Header2', parent=styles['Heading3'], alignment=1, fontSize=10)),
+                    Paragraph("LABORATORY SIT-IN MONITORING SYSTEM REPORT", 
+                               ParagraphStyle('Header3', parent=styles['Heading4'], alignment=1, fontSize=9, spaceBefore=4))
+                ],
+                # CCS Logo
+                Image(os.path.join('static', 'images', 'ccs_logo.png'), width=0.7*inch, height=0.7*inch)
+            ]
+        ]
+        header_table = Table(header_data, colWidths=[1*inch, 8*inch, 1*inch])
+        header_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (1, 0), (1, 0), colors.white),
+        ]))
+        
+        elements.append(header_table)
+        elements.append(Spacer(1, 20))
+        
+        # Add title and student info
         title = Paragraph(f"Feedback Report - {student['lastname']}, {student['firstname']}", title_style)
         elements.append(title)
+        
+        # Add student info table
+        student_info = [
+            ["ID Number:", student_id, "Course:", student['course']],
+            ["Name:", f"{student['lastname']}, {student['firstname']}", "Year Level:", student['year_level']],
+        ]
+        student_table = Table(student_info, colWidths=[1*inch, 3*inch, 1*inch, 3*inch])
+        student_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+            ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+            ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(student_table)
         elements.append(Spacer(1, 12))
         
         # Define table data
         data = []
         # Add header row
-        headers = ['ID No.', 'Name', 'Laboratory', 'Date', 'Rating', 'Comments']
+        headers = ['Laboratory', 'Date', 'Rating', 'Comments']
         data.append(headers)
         
         # Add feedback data rows
         for feedback_row in feedback:
             feedback_dict = dict(feedback_row)
-            name = f"{feedback_dict['lastname']}, {feedback_dict['firstname']} {feedback_dict['midname'] or ''}"
             laboratory = f"{feedback_dict['building']} - Room {feedback_dict['room_number']}"
             stars = "★" * feedback_dict['rating'] + "☆" * (5 - feedback_dict['rating'])
             
+            # Wrap text in Paragraph for auto-wrapping
+            lab_para = Paragraph(laboratory, cell_style)
+            comments_para = Paragraph(feedback_dict['comments'] or "", cell_style)
+            
             data.append([
-                feedback_dict['idno'],
-                name,
-                laboratory,
+                lab_para,
                 feedback_dict['date'],
                 stars,
-                feedback_dict['comments'] or ""
+                comments_para
             ])
         
+        # Optimize column widths
+        col_widths = [
+            2.0*inch,      # Laboratory
+            1.5*inch,      # Date
+            1.0*inch,      # Rating
+            5.5*inch       # Comments
+        ]
+        
         # Create the table with the data
-        table = Table(data, colWidths=[1*inch, 1.8*inch, 1.5*inch, 1*inch, 0.8*inch, 2.5*inch])
+        table = Table(data, colWidths=col_widths, repeatRows=1)
         
         # Add style to the table
         style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header row styling
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkgreen),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
-            ('ALIGN', (4, 1), (4, -1), 'CENTER'),  # Center align the rating column
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            
+            # Data rows styling - alternating colors
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            
+            # Column alignments
+            ('ALIGN', (1, 1), (2, -1), 'CENTER'),  # Date and Rating columns
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            
+            # Grid styling
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            
+            # Cell padding
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ])
+        
+        # Add alternating row colors
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.add('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
+        
         table.setStyle(style)
         
         # Add the table to the elements
         elements.append(table)
         
-        # Build the PDF
-        doc.build(elements)
+        # Add footer with page numbers
+        def add_page_number(canvas, doc):
+            page_num = canvas.getPageNumber()
+            text = f"Page {page_num}"
+            canvas.setFont("Helvetica", 8)
+            canvas.drawRightString(doc.width + doc.rightMargin - 10, doc.bottomMargin - 20, text)
+            canvas.drawString(doc.leftMargin, doc.bottomMargin - 20, 
+                             f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Build the PDF with page numbers
+        doc.build(elements, onFirstPage=add_page_number, onLaterPages=add_page_number)
         
         # Get the value of the BytesIO buffer
         pdf_data = buffer.getvalue()
@@ -1813,7 +1989,7 @@ def export_feedback_pdf(student_id):
         
         # Create the response
         response = make_response(pdf_data)
-        response.headers['Content-Disposition'] = f'attachment; filename=feedback_{student['lastname']}_{student['firstname']}_{datetime.now().strftime("%Y-%m-%d")}.pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=feedback_{student["lastname"]}_{student["firstname"]}_{datetime.now().strftime("%Y-%m-%d")}.pdf'
         response.headers['Content-Type'] = 'application/pdf'
         
         return response
@@ -2304,14 +2480,14 @@ def export_all_sessions_pdf():
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Create the PDF document
+        # Create the PDF document - use landscape for better fit
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=letter,
-            rightMargin=72,
-            leftMargin=72,
-            topMargin=72,
-            bottomMargin=72
+            pagesize=landscape(letter),
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
         )
         
         # Container for the 'Flowable' objects
@@ -2329,10 +2505,46 @@ def export_all_sessions_pdf():
             alignment=1  # center alignment
         )
         
+        # Add the header with logos
+        header_data = [
+            [
+                # UC Logo
+                Image(os.path.join('static', 'images', 'uc_logo.png'), width=0.8*inch, height=0.8*inch),
+                [
+                    Paragraph("University of Cebu - Main Campus", 
+                               ParagraphStyle('Header1', parent=styles['Heading2'], alignment=1)),
+                    Paragraph("College of Computer Studies", 
+                               ParagraphStyle('Header2', parent=styles['Heading3'], alignment=1)),
+                    Paragraph("LABORATORY SIT-IN MONITORING SYSTEM REPORT", 
+                               ParagraphStyle('Header3', parent=styles['Heading4'], alignment=1, spaceBefore=6))
+                ],
+                # CCS Logo
+                Image(os.path.join('static', 'images', 'ccs_logo.png'), width=0.8*inch, height=0.8*inch)
+            ]
+        ]
+        header_table = Table(header_data, colWidths=[1.2*inch, 8*inch, 1.2*inch])
+        header_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (1, 0), (1, 0), colors.white),
+        ]))
+        
+        elements.append(header_table)
+        elements.append(Spacer(1, 20))
+        
         # Add title
         title = Paragraph(f"All Sit-in Sessions - {datetime.now().strftime('%Y-%m-%d')}", title_style)
         elements.append(title)
         elements.append(Spacer(1, 12))
+        
+        # Create paragraph style for table cells to allow word wrapping
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10,  # Line spacing
+            wordWrap='CJK'  # Enable word wrapping
+        )
         
         # Define table data
         data = []
@@ -2346,37 +2558,78 @@ def export_all_sessions_pdf():
             name = f"{session_dict['lastname']}, {session_dict['firstname']} {session_dict['midname'] or ''}"
             laboratory = f"{session_dict['building']} - Room {session_dict['room_number']}"
             
+            # Format times for better display
+            check_in = format_time(session_dict['check_in_time'])
+            check_out = format_time(session_dict['check_out_time'])
+            
+            # Wrap text in Paragraph for auto-wrapping
+            purpose = Paragraph(session_dict['purpose'] or "", cell_style)
+            name_para = Paragraph(name, cell_style)
+            lab_para = Paragraph(laboratory, cell_style)
+            
             data.append([
                 session_dict['idno'],
-                name,
-                session_dict['purpose'] or "",
-                laboratory,
-                session_dict['check_in_time'],
-                session_dict['check_out_time'],
+                name_para,
+                purpose,
+                lab_para,
+                check_in,
+                check_out,
                 session_dict['date'],
                 f"{session_dict['duration']} hrs"
             ])
         
+        # Optimize column widths
+        col_widths = [
+            0.8*inch,      # ID No
+            1.5*inch,      # Name
+            2.0*inch,      # Purpose (wider for text wrapping)
+            1.5*inch,      # Laboratory
+            0.9*inch,      # Check-in
+            0.9*inch,      # Check-out
+            0.9*inch,      # Date
+            0.8*inch       # Duration
+        ]
+        
         # Create the table with the data
-        table = Table(data, colWidths=[1*inch, 2*inch, 1.5*inch, 1.5*inch, 1.2*inch, 1.2*inch, 1*inch, 1*inch])
+        table = Table(data, colWidths=col_widths, repeatRows=1)
         
         # Add style to the table
         style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header row styling
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkgreen),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            
+            # Data rows styling - alternating colors
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            
+            # Column alignments
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ID column
+            ('ALIGN', (4, 1), (7, -1), 'CENTER'),  # Time, date, duration columns
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            
+            # Grid styling
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            
+            # Cell padding
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ])
+        
+        # Add alternating row colors
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.add('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
+        
         table.setStyle(style)
         
         # Add the table to the elements
@@ -2422,6 +2675,8 @@ def export_all_feedback_pdf():
                 s.lastname,
                 s.firstname,
                 s.midname,
+                s.course,
+                s.year_level,
                 l.building,
                 l.room_number,
                 DATE(ls.check_in_time) as date,
@@ -2437,14 +2692,14 @@ def export_all_feedback_pdf():
         # Create PDF buffer
         buffer = BytesIO()
         
-        # Create the PDF document
+        # Create the PDF document - use landscape for better fit
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=letter,
-            rightMargin=72,
-            leftMargin=72,
-            topMargin=72,
-            bottomMargin=72
+            pagesize=landscape(letter),
+            rightMargin=36,
+            leftMargin=36,
+            topMargin=36,
+            bottomMargin=36
         )
         
         # Container for the 'Flowable' objects
@@ -2462,6 +2717,41 @@ def export_all_feedback_pdf():
             alignment=1  # center alignment
         )
         
+        # Define cell style for wrapping text
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10
+        )
+        
+        # Add the header with logos
+        header_data = [
+            [
+                # UC Logo
+                Image(os.path.join('static', 'images', 'uc_logo.png'), width=0.7*inch, height=0.7*inch),
+                [
+                    Paragraph("University of Cebu - Main Campus", 
+                               ParagraphStyle('Header1', parent=styles['Heading2'], alignment=1, fontSize=12)),
+                    Paragraph("College of Computer Studies", 
+                               ParagraphStyle('Header2', parent=styles['Heading3'], alignment=1, fontSize=10)),
+                    Paragraph("LABORATORY SIT-IN MONITORING SYSTEM REPORT", 
+                               ParagraphStyle('Header3', parent=styles['Heading4'], alignment=1, fontSize=9, spaceBefore=4))
+                ],
+                # CCS Logo
+                Image(os.path.join('static', 'images', 'ccs_logo.png'), width=0.7*inch, height=0.7*inch)
+            ]
+        ]
+        header_table = Table(header_data, colWidths=[1*inch, 8*inch, 1*inch])
+        header_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BACKGROUND', (1, 0), (1, 0), colors.white),
+        ]))
+        
+        elements.append(header_table)
+        elements.append(Spacer(1, 20))
+        
         # Add title
         title = Paragraph(f"All Student Feedback - {datetime.now().strftime('%Y-%m-%d')}", title_style)
         elements.append(title)
@@ -2470,7 +2760,7 @@ def export_all_feedback_pdf():
         # Define table data
         data = []
         # Add header row
-        headers = ['ID No.', 'Name', 'Laboratory', 'Date', 'Rating', 'Comments']
+        headers = ['ID No.', 'Name', 'Course', 'Year', 'Laboratory', 'Date', 'Rating', 'Comments']
         data.append(headers)
         
         # Add feedback data rows
@@ -2480,35 +2770,68 @@ def export_all_feedback_pdf():
             laboratory = f"{feedback_dict['building']} - Room {feedback_dict['room_number']}"
             stars = "★" * feedback_dict['rating'] + "☆" * (5 - feedback_dict['rating'])
             
+            # Wrap text in Paragraph for auto-wrapping
+            name_para = Paragraph(name, cell_style)
+            lab_para = Paragraph(laboratory, cell_style)
+            comments_para = Paragraph(feedback_dict['comments'] or "", cell_style)
+            
             data.append([
                 feedback_dict['idno'],
-                name,
-                laboratory,
+                name_para,
+                feedback_dict['course'],
+                feedback_dict['year_level'],
+                lab_para,
                 feedback_dict['date'],
                 stars,
-                feedback_dict['comments'] or ""
+                comments_para
             ])
         
+        # Optimize column widths
+        col_widths = [
+            0.8*inch,      # ID No
+            1.5*inch,      # Name
+            0.9*inch,      # Course
+            0.5*inch,      # Year
+            1.3*inch,      # Laboratory
+            0.8*inch,      # Date
+            0.7*inch,      # Rating
+            3.5*inch       # Comments
+        ]
+        
         # Create the table with the data
-        table = Table(data, colWidths=[1*inch, 1.8*inch, 1.5*inch, 1*inch, 0.8*inch, 2.5*inch])
+        table = Table(data, colWidths=col_widths, repeatRows=1)
         
         # Add style to the table
         style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.green),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header row styling
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkgreen),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Center align the first column
-            ('ALIGN', (4, 1), (4, -1), 'CENTER'),  # Center align the rating column
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 8),
+            
+            # Data rows styling - alternating colors
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            
+            # Column alignments
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # ID column
+            ('ALIGN', (2, 1), (3, -1), 'CENTER'),  # Course and Year columns
+            ('ALIGN', (5, 1), (6, -1), 'CENTER'),  # Date and Rating columns
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('TOPPADDING', (0, 1), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            
+            # Grid styling
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+            
+            # Cell padding
+            ('TOPPADDING', (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ])
         table.setStyle(style)
         

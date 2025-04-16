@@ -136,12 +136,21 @@
         </h4>
         <div class="client-item">
           <div class="client-info">
-            <br />
-            <h4 style="text-align: center">
-              University of Cebu <br />
-              COLLEGE OF INFORMATION & COMPUTER STUDIES
-            </h4>
-            <br />
+            <!-- Professional header similar to reports -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 10px; border-bottom: 1px solid #eaeaea;">
+              <div style="flex: 1; text-align: center;">
+                <img src="{{ url_for('static', filename='images/uc_logo.png') }}" alt="UC Logo" style="height: 70px;">
+              </div>
+              <div style="flex: 4; text-align: center;">
+                <h3 style="margin: 0; color: #003366; font-size: 18px;">University of Cebu - Main Campus</h3>
+                <h4 style="margin: 5px 0; color: #333; font-size: 16px;">College of Computer Studies</h4>
+                <h5 style="margin: 5px 0; color: #666; font-size: 14px;">LABORATORY SIT-IN RULES & PROTOCOLS</h5>
+              </div>
+              <div style="flex: 1; text-align: center;">
+                <img src="{{ url_for('static', filename='images/ccs_logo.png') }}" alt="CCS Logo" style="height: 70px;">
+              </div>
+            </div>
+            
             <span>
               To avoid embarrassment and maintain camaraderie with your friends
               and superiors at our laboratories, please observe the
