@@ -3442,5 +3442,344 @@ def admin_reset_student_session():
     except sqlite3.Error as e:
         return jsonify({'success': False, 'message': f'Database error: {str(e)}'}), 500
 
+@app.route('/admin/lab_resources', methods=['GET', 'POST'])
+def admin_lab_resources():
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        if request.method == 'POST':
+            if 'add_resource' in request.form:
+                # Add new resource
+                title = request.form.get('title')
+                description = request.form.get('description')
+                resource_type = request.form.get('resource_type')
+                file_path = None
+                
+                # Handle file upload if provided
+                if 'resource_file' in request.files and request.files['resource_file'].filename:
+                    file = request.files['resource_file']
+                    if file.filename:
+                        # Ensure uploads directory exists
+                        uploads_dir = os.path.join('static', 'uploads', 'resources')
+                        os.makedirs(uploads_dir, exist_ok=True)
+                        
+                        # Generate unique filename
+                        filename = secure_filename(file.filename)
+                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                        unique_filename = f"{timestamp}_{filename}"
+                        file_path = os.path.join('uploads', 'resources', unique_filename)
+                        
+                        # Save the file
+                        file.save(os.path.join('static', file_path))
+                
+                # Insert into database
+                conn.execute("""
+                    INSERT INTO lab_resources (title, description, file_path, resource_type, posted_by, posted_date, is_active)
+                    VALUES (?, ?, ?, ?, ?, datetime('now'), 1)
+                """, (title, description, file_path, resource_type, session['user']))
+                
+                # Log the action
+                conn.execute("""
+                    INSERT INTO admin_logs (admin_id, action, timestamp)
+                    VALUES (?, 'Added new lab resource', datetime('now'))
+                """, (session['user'],))
+                
+                conn.commit()
+                flash("Resource added successfully!", "success")
+                return redirect(url_for('admin_lab_resources'))
+            
+            elif 'edit_resource' in request.form:
+                # Edit existing resource
+                resource_id = request.form.get('resource_id')
+                title = request.form.get('title')
+                description = request.form.get('description')
+                resource_type = request.form.get('resource_type')
+                
+                # Get existing resource to check if there's a file already
+                existing_resource = conn.execute("SELECT file_path FROM lab_resources WHERE resource_id = ?", 
+                                                (resource_id,)).fetchone()
+                file_path = existing_resource['file_path'] if existing_resource else None
+                
+                # Handle file upload if provided
+                if 'resource_file' in request.files and request.files['resource_file'].filename:
+                    file = request.files['resource_file']
+                    if file.filename:
+                        # Remove old file if exists
+                        if file_path and os.path.exists(os.path.join('static', file_path)):
+                            os.remove(os.path.join('static', file_path))
+                        
+                        # Ensure uploads directory exists
+                        uploads_dir = os.path.join('static', 'uploads', 'resources')
+                        os.makedirs(uploads_dir, exist_ok=True)
+                        
+                        # Generate unique filename
+                        filename = secure_filename(file.filename)
+                        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                        unique_filename = f"{timestamp}_{filename}"
+                        file_path = os.path.join('uploads', 'resources', unique_filename)
+                        
+                        # Save the file
+                        file.save(os.path.join('static', file_path))
+                
+                # Update database
+                conn.execute("""
+                    UPDATE lab_resources 
+                    SET title = ?, description = ?, file_path = ?, resource_type = ?
+                    WHERE resource_id = ?
+                """, (title, description, file_path, resource_type, resource_id))
+                
+                # Log the action
+                conn.execute("""
+                    INSERT INTO admin_logs (admin_id, action, timestamp)
+                    VALUES (?, 'Updated lab resource', datetime('now'))
+                """, (session['user'],))
+                
+                conn.commit()
+                flash("Resource updated successfully!", "success")
+                return redirect(url_for('admin_lab_resources'))
+        
+        # Get all resources
+        resources = conn.execute("""
+            SELECT * FROM lab_resources
+            ORDER BY posted_date DESC
+        """).fetchall()
+        
+        return render_template('admin_lab_resources.html', resources=resources)
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_dashboard'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/admin/lab_resources/toggle/<int:resource_id>', methods=['GET'])
+def toggle_resource(resource_id):
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get current status
+        resource = conn.execute("SELECT is_active FROM lab_resources WHERE resource_id = ?", 
+                               (resource_id,)).fetchone()
+        
+        if not resource:
+            flash("Resource not found.", "danger")
+            return redirect(url_for('admin_lab_resources'))
+        
+        # Toggle status
+        new_status = 0 if resource['is_active'] else 1
+        status_text = "enabled" if new_status else "disabled"
+        
+        conn.execute("UPDATE lab_resources SET is_active = ? WHERE resource_id = ?", 
+                    (new_status, resource_id))
+        
+        # Log the action
+        conn.execute("""
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, ?, datetime('now'))
+        """, (session['user'], f"Resource #{resource_id} {status_text}"))
+        
+        conn.commit()
+        flash(f"Resource has been {status_text}.", "success")
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+    finally:
+        if conn:
+            conn.close()
+    
+    return redirect(url_for('admin_lab_resources'))
+
+@app.route('/admin/lab_resources/delete/<int:resource_id>', methods=['GET'])
+def delete_resource(resource_id):
+    # Check if user is logged in and is admin
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get resource file path
+        resource = conn.execute("SELECT file_path FROM lab_resources WHERE resource_id = ?", 
+                               (resource_id,)).fetchone()
+        
+        if not resource:
+            flash("Resource not found.", "danger")
+            return redirect(url_for('admin_lab_resources'))
+        
+        # Delete file if exists
+        if resource['file_path'] and os.path.exists(os.path.join('static', resource['file_path'])):
+            os.remove(os.path.join('static', resource['file_path']))
+        
+        # Delete from database
+        conn.execute("DELETE FROM lab_resources WHERE resource_id = ?", (resource_id,))
+        
+        # Log the action
+        conn.execute("""
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, ?, datetime('now'))
+        """, (session['user'], f"Deleted resource #{resource_id}"))
+        
+        conn.commit()
+        flash("Resource has been deleted.", "success")
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+    finally:
+        if conn:
+            conn.close()
+    
+    return redirect(url_for('admin_lab_resources'))
+
+@app.route('/lab_resources')
+def lab_resources():
+    # Check if user is logged in
+    if 'user' not in session:
+        flash("Please log in to access lab resources.", "warning")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get only active resources for students
+        if session.get('is_admin'):
+            # Admins can see all resources
+            resources = conn.execute("""
+                SELECT * FROM lab_resources
+                ORDER BY posted_date DESC
+            """).fetchall()
+        else:
+            # Students can only see active resources
+            resources = conn.execute("""
+                SELECT * FROM lab_resources
+                WHERE is_active = 1
+                ORDER BY posted_date DESC
+            """).fetchall()
+        
+        return render_template('lab_resources.html', resources=resources)
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('dashboard'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/lab_resources/view/<int:resource_id>')
+def view_resource(resource_id):
+    # Check if user is logged in
+    if 'user' not in session:
+        flash("Please log in to access lab resources.", "warning")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get resource
+        resource = conn.execute("""
+            SELECT * FROM lab_resources
+            WHERE resource_id = ?
+        """, (resource_id,)).fetchone()
+        
+        if not resource:
+            flash("Resource not found.", "danger")
+            return redirect(url_for('lab_resources'))
+        
+        # Check if resource is active (students only)
+        if not session.get('is_admin') and not resource['is_active']:
+            flash("This resource is currently unavailable.", "warning")
+            return redirect(url_for('lab_resources'))
+        
+        # Increment view count
+        conn.execute("""
+            UPDATE lab_resources
+            SET view_count = view_count + 1
+            WHERE resource_id = ?
+        """, (resource_id,))
+        
+        conn.commit()
+        
+        # If the resource has a file path, check the file type
+        file_type = None
+        if resource['file_path']:
+            file_extension = os.path.splitext(resource['file_path'])[1].lower()
+            
+            # Classify file type
+            if file_extension in ['.pdf']:
+                file_type = 'pdf'
+            elif file_extension in ['.jpg', '.jpeg', '.png', '.gif']:
+                file_type = 'image'
+            elif file_extension in ['.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx']:
+                file_type = 'document'
+            else:
+                file_type = 'other'
+        
+        return render_template('view_resource.html', resource=resource, file_type=file_type)
+        
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('lab_resources'))
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/lab_resources/download/<int:resource_id>')
+def download_resource(resource_id):
+    # Check if user is logged in
+    if 'user' not in session:
+        flash("Please log in to download resources.", "warning")
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get resource
+        resource = conn.execute("""
+            SELECT * FROM lab_resources
+            WHERE resource_id = ?
+        """, (resource_id,)).fetchone()
+        
+        if not resource or not resource['file_path']:
+            flash("Resource or file not found.", "danger")
+            return redirect(url_for('lab_resources'))
+        
+        # Check if resource is active (students only)
+        if not session.get('is_admin') and not resource['is_active']:
+            flash("This resource is currently unavailable.", "warning")
+            return redirect(url_for('lab_resources'))
+        
+        # File path
+        file_path = os.path.join('static', resource['file_path'])
+        
+        if not os.path.exists(file_path):
+            flash("File not found on server.", "danger")
+            return redirect(url_for('lab_resources'))
+        
+        # Generate filename for download
+        filename = os.path.basename(resource['file_path'])
+        if '_' in filename:
+            # Remove timestamp prefix from filename
+            filename = filename.split('_', 1)[1]
+        
+        return send_file(file_path, as_attachment=True, download_name=filename)
+        
+    except Exception as e:
+        flash(f"Error downloading file: {str(e)}", "danger")
+        return redirect(url_for('lab_resources'))
+    finally:
+        if conn:
+            conn.close()
+
 if __name__ == '__main__':
     app.run(debug=True)

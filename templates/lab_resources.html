@@ -1,0 +1,351 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      {% if session.get('is_admin') %}
+      <h2>UC - Admin</h2>
+      {% else %}
+      <h2>UC - Student</h2>
+      {% endif %}
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+
+    <div class="sidebar-menu">
+      {% if session.get('is_admin') %}
+      <!-- Admin Sidebar Menu -->
+      <ul>
+        <li>
+          <a href="{{ url_for('admin_dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Admin Dashboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}"
+            ><i class="fa fa-users"></i> Current Sit-In</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            ><i class="fa fa-list-alt"></i> View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}"
+            ><i class="fa fa-bullhorn"></i> Announcements</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_resources') }}" class="active"
+            ><i class="fa fa-book"></i> Lab Resources</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}"
+            ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
+          >
+        </li>
+        <li style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System</a
+          >
+        </li>
+      </ul>
+      {% else %}
+      <!-- Student Sidebar Menu -->
+      <ul>
+        <li>
+          <a href="{{ url_for('dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Dashboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('profile') }}"
+            ><i class="fa fa-user"></i> Profile</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('remaining_sessions') }}"
+            ><i class="fa fa-clock-o"></i> Remaining Sessions</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('sit_in_history') }}"
+            ><i class="fa fa-history"></i> Sit-in History</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('lab_resources') }}" class="active"
+            ><i class="fa fa-book"></i> Lab Resources</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('reservation') }}"
+            ><i class="fa fa-calendar"></i> Reservation</a
+          >
+        </li>
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Lab Resources</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        {% if session.get('is_admin') %}
+        <a
+          href="{{ url_for('admin_lab_resources') }}"
+          class="Btn"
+          style="background-color: #4caf50;"
+        >
+          <div class="sign">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+          </div>
+          <div class="text">Back</div>
+        </a>
+        {% endif %}
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Resource Categories -->
+    <div class="content-row">
+      <div class="filter-buttons">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="document">Documents</button>
+        <button class="filter-btn" data-filter="video">Videos</button>
+        <button class="filter-btn" data-filter="link">Links</button>
+        <button class="filter-btn" data-filter="other">Other</button>
+      </div>
+    </div>
+
+    <!-- Resources Grid -->
+    <div class="resources-grid">
+      {% if resources %}
+        {% for resource in resources %}
+        <div class="resource-card" data-type="{{ resource.resource_type }}">
+          <div class="resource-icon">
+            {% if resource.resource_type == 'document' %}
+              <i class="fa fa-file-pdf-o"></i>
+            {% elif resource.resource_type == 'video' %}
+              <i class="fa fa-video-camera"></i>
+            {% elif resource.resource_type == 'link' %}
+              <i class="fa fa-link"></i>
+            {% else %}
+              <i class="fa fa-file-o"></i>
+            {% endif %}
+          </div>
+          <div class="resource-content">
+            <h3>{{ resource.title }}</h3>
+            <p class="resource-description">
+              {{ resource.description|truncate(100) }}
+            </p>
+            <div class="resource-meta">
+              <span><i class="fa fa-calendar"></i> {{ resource.posted_date|format_date|first }}</span>
+              <span><i class="fa fa-eye"></i> {{ resource.view_count }} views</span>
+            </div>
+            <a href="{{ url_for('view_resource', resource_id=resource.resource_id) }}" class="resource-button">View Details</a>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="no-resources">
+          <i class="fa fa-info-circle"></i>
+          <p>No resources available at the moment. Please check back later.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .filter-btn {
+    background-color: #f1f1f1;
+    border: none;
+    color: #333;
+    padding: 8px 16px;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+  
+  .filter-btn:hover {
+    background-color: #ddd;
+  }
+  
+  .filter-btn.active {
+    background-color: #4caf50;
+    color: white;
+  }
+  
+  .resources-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  
+  .resource-card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .resource-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  }
+  
+  .resource-icon {
+    background-color: #f9f9f9;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  
+  .resource-icon i {
+    font-size: 40px;
+    color: #555;
+  }
+  
+  .resource-card[data-type="document"] .resource-icon i {
+    color: #4CAF50;
+  }
+  
+  .resource-card[data-type="video"] .resource-icon i {
+    color: #F44336;
+  }
+  
+  .resource-card[data-type="link"] .resource-icon i {
+    color: #2196F3;
+  }
+  
+  .resource-content {
+    padding: 20px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .resource-content h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #333;
+  }
+  
+  .resource-description {
+    color: #666;
+    flex-grow: 1;
+    margin-bottom: 15px;
+  }
+  
+  .resource-meta {
+    display: flex;
+    justify-content: space-between;
+    color: #888;
+    font-size: 0.9em;
+    margin-bottom: 15px;
+  }
+  
+  .resource-meta span {
+    display: flex;
+    align-items: center;
+  }
+  
+  .resource-meta i {
+    margin-right: 5px;
+  }
+  
+  .resource-button {
+    display: inline-block;
+    background-color: #4caf50;
+    color: white;
+    text-align: center;
+    padding: 8px 0;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background-color 0.3s;
+    width: 100%;
+  }
+  
+  .resource-button:hover {
+    background-color: #45a049;
+  }
+  
+  .no-resources {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 50px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    color: #666;
+  }
+  
+  .no-resources i {
+    font-size: 40px;
+    color: #999;
+    margin-bottom: 10px;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const resourceCards = document.querySelectorAll('.resource-card');
+    
+    filterButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        // Remove active class from all buttons
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+        
+        // Add active class to clicked button
+        this.classList.add('active');
+        
+        // Get filter value
+        const filter = this.getAttribute('data-filter');
+        
+        // Show/hide cards based on filter
+        resourceCards.forEach(card => {
+          if (filter === 'all' || card.getAttribute('data-type') === filter) {
+            card.style.display = 'flex';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+    });
+  });
+</script>
+
+{% endblock %} 
