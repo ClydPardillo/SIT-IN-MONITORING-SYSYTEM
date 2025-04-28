@@ -21,7 +21,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Image
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key' 
+app.secret_key = 'your_secret_key'
 
 def get_db_connection():
     conn = sqlite3.connect("users.db")
@@ -3780,6 +3780,647 @@ def download_resource(resource_id):
     finally:
         if conn:
             conn.close()
+
+@app.route('/student/lab-schedule')
+def student_lab_schedule():
+    # Add session check
+    if 'user' not in session:
+        flash('Access denied: Student login required', 'danger')
+        return redirect(url_for('home'))
+    
+    # Get all laboratories
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Fetch laboratories - remove software column reference
+    cursor.execute('''
+        SELECT lab_id, building, room_number, capacity, equipment
+        FROM laboratories
+        ORDER BY building, room_number
+    ''')
+    labs = [dict(row) for row in cursor.fetchall()]
+    
+    # Fetch lab schedules with joined laboratory info - update to match schema
+    cursor.execute('''
+        SELECT 
+            s.schedule_id, 
+            l.lab_id,
+            l.building,
+            l.room_number,
+            s.day_of_week as day,
+            s.start_time,
+            s.end_time,
+            s.is_available,
+            s.reserved_for
+        FROM lab_schedules s
+        JOIN laboratories l ON s.lab_id = l.lab_id
+        ORDER BY s.day_of_week, s.start_time
+    ''')
+    schedules = [dict(row) for row in cursor.fetchall()]
+    
+    # Define time slots with format HH:MM - HH:MM
+    time_slots_24h = [
+        "07:00 - 08:00", "08:00 - 09:00", "09:00 - 10:00", "10:00 - 11:00",
+        "11:00 - 12:00", "12:00 - 13:00", "13:00 - 14:00", "14:00 - 15:00",
+        "15:00 - 16:00", "16:00 - 17:00", "17:00 - 18:00", "18:00 - 19:00",
+        "19:00 - 20:00", "20:00 - 21:00"
+    ]
+    
+    # Format time slots for display
+    time_slots = []
+    for slot in time_slots_24h:
+        start, end = slot.split(' - ')
+        formatted_start = format_time(start)
+        formatted_end = format_time(end)
+        time_slots.append(f"{formatted_start} - {formatted_end}")
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('student_lab_schedule.html', labs=labs, schedules=schedules, time_slots=time_slots)
+
+@app.route('/reserve-schedule', methods=['POST'])
+def reserve_schedule():
+    # For now, just redirect back to the schedule page with a message
+    flash('Reservation functionality will be implemented soon.', 'info')
+    return redirect(url_for('student_lab_schedule'))
+
+@app.route('/admin/lab-schedule')
+def admin_lab_schedule():
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    # Get all laboratories
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Create the tables if they don't exist
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS laboratories (
+            lab_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            building TEXT NOT NULL,
+            room_number TEXT NOT NULL,
+            capacity INTEGER NOT NULL,
+            equipment TEXT,
+            UNIQUE(building, room_number)
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS lab_schedules (
+            schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lab_id INTEGER NOT NULL,
+            day_of_week TEXT NOT NULL CHECK (day_of_week IN ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')),
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            is_available BOOLEAN DEFAULT 1,
+            reserved_for TEXT,
+            FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+            UNIQUE(lab_id, day_of_week, start_time)
+        )
+    ''')
+    
+    conn.commit()
+    
+    # Fetch laboratories - remove software column
+    cursor.execute('''
+        SELECT lab_id, building, room_number, capacity, equipment
+        FROM laboratories
+        ORDER BY building, room_number
+    ''')
+    labs = [dict(row) for row in cursor.fetchall()]
+    
+    # Fetch lab schedules with joined laboratory info - update to match schema
+    cursor.execute('''
+        SELECT 
+            s.schedule_id, 
+            l.lab_id,
+            l.building,
+            l.room_number,
+            s.day_of_week as day,
+            s.start_time,
+            s.end_time,
+            s.is_available,
+            s.reserved_for
+        FROM lab_schedules s
+        JOIN laboratories l ON s.lab_id = l.lab_id
+        ORDER BY s.day_of_week, s.start_time
+    ''')
+    schedules = [dict(row) for row in cursor.fetchall()]
+    
+    # Define time slots with format HH:MM - HH:MM
+    time_slots_24h = [
+        "07:00 - 08:00", "08:00 - 09:00", "09:00 - 10:00", "10:00 - 11:00",
+        "11:00 - 12:00", "12:00 - 13:00", "13:00 - 14:00", "14:00 - 15:00",
+        "15:00 - 16:00", "16:00 - 17:00", "17:00 - 18:00", "18:00 - 19:00",
+        "19:00 - 20:00", "20:00 - 21:00"
+    ]
+    
+    # Format time slots for display
+    time_slots = []
+    for slot in time_slots_24h:
+        start, end = slot.split(' - ')
+        formatted_start = format_time(start)
+        formatted_end = format_time(end)
+        time_slots.append(f"{formatted_start} - {formatted_end}")
+    
+    cursor.close()
+    conn.close()
+    
+    return render_template('admin_lab_schedule.html', labs=labs, schedules=schedules, time_slots=time_slots)
+
+@app.route('/add_schedule', methods=['POST'])
+def add_schedule():
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        lab_id = request.form.get('lab_id')
+        day = request.form.get('day')
+        start_time = request.form.get('start_time')
+        end_time = request.form.get('end_time')
+        status = request.form.get('status')
+        reserved_for = request.form.get('reserved_for', '')
+        
+        # Validate inputs
+        if not all([lab_id, day, start_time, end_time, status]):
+            flash('All fields are required', 'danger')
+            return redirect(url_for('admin_lab_schedule'))
+        
+        # Check if end time is after start time
+        if start_time >= end_time:
+            flash('End time must be after start time', 'danger')
+            return redirect(url_for('admin_lab_schedule'))
+        
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Check for scheduling conflicts
+            cursor.execute('''
+                SELECT * FROM lab_schedules 
+                WHERE lab_id = ? AND day_of_week = ? AND 
+                ((start_time <= ? AND end_time > ?) OR
+                 (start_time < ? AND end_time >= ?) OR
+                 (start_time >= ? AND end_time <= ?))
+            ''', (lab_id, day, start_time, start_time, end_time, end_time, start_time, end_time))
+            
+            if cursor.fetchone():
+                flash('Schedule conflict detected. Another schedule exists for this time slot.', 'danger')
+                return redirect(url_for('admin_lab_schedule'))
+            
+            # Insert new schedule
+            cursor.execute('''
+                INSERT INTO lab_schedules (lab_id, day_of_week, start_time, end_time, is_available, reserved_for)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (lab_id, day, start_time, end_time, 1 if status == 'Available' else 0, reserved_for))
+            
+            conn.commit()
+            flash('Schedule added successfully', 'success')
+            
+        except Exception as e:
+            flash(f'Error adding schedule: {str(e)}', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return redirect(url_for('admin_lab_schedule'))
+
+@app.route('/edit_schedule/<int:schedule_id>', methods=['GET', 'POST'])
+def edit_schedule(schedule_id):
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        lab_id = request.form.get('lab_id')
+        day_of_week = request.form.get('day')
+        start_time = request.form.get('start_time')
+        end_time = request.form.get('end_time')
+        status = request.form.get('status')
+        reserved_for = request.form.get('reserved_for', '')
+        
+        # Validate inputs
+        if not all([lab_id, day_of_week, start_time, end_time, status]):
+            flash('All fields are required', 'danger')
+            return redirect(url_for('edit_schedule', schedule_id=schedule_id))
+        
+        # Check if end time is after start time
+        if start_time >= end_time:
+            flash('End time must be after start time', 'danger')
+            return redirect(url_for('edit_schedule', schedule_id=schedule_id))
+        
+        try:
+            # Check for scheduling conflicts, excluding current schedule
+            cursor.execute('''
+                SELECT * FROM lab_schedules 
+                WHERE lab_id = ? AND day_of_week = ? AND schedule_id != ? AND
+                ((start_time <= ? AND end_time > ?) OR
+                 (start_time < ? AND end_time >= ?) OR
+                 (start_time >= ? AND end_time <= ?))
+            ''', (lab_id, day_of_week, schedule_id, start_time, start_time, end_time, end_time, start_time, end_time))
+            
+            if cursor.fetchone():
+                flash('Schedule conflict detected. Another schedule exists for this time slot.', 'danger')
+                return redirect(url_for('edit_schedule', schedule_id=schedule_id))
+            
+            # Update schedule
+            cursor.execute('''
+                UPDATE lab_schedules 
+                SET lab_id = ?, day_of_week = ?, start_time = ?, end_time = ?, is_available = ?, reserved_for = ?
+                WHERE schedule_id = ?
+            ''', (lab_id, day_of_week, start_time, end_time, 1 if status == 'Available' else 0, reserved_for, schedule_id))
+            
+            conn.commit()
+            flash('Schedule updated successfully', 'success')
+            return redirect(url_for('admin_lab_schedule'))
+            
+        except Exception as e:
+            flash(f'Error updating schedule: {str(e)}', 'danger')
+            return redirect(url_for('edit_schedule', schedule_id=schedule_id))
+    
+    # GET request - Display edit form
+    try:
+        # Get schedule details
+        cursor.execute('''
+            SELECT 
+                schedule_id, 
+                lab_id,
+                day_of_week,
+                start_time,
+                end_time,
+                is_available,
+                reserved_for
+            FROM lab_schedules 
+            WHERE schedule_id = ?
+        ''', (schedule_id,))
+        schedule = cursor.fetchone()
+        
+        if not schedule:
+            flash('Schedule not found', 'danger')
+            return redirect(url_for('admin_lab_schedule'))
+        
+        # Get all laboratories for the select dropdown
+        cursor.execute('''
+            SELECT lab_id, building, room_number
+            FROM laboratories
+            ORDER BY building, room_number
+        ''')
+        labs = [dict(row) for row in cursor.fetchall()]
+        
+        schedule_dict = dict(schedule)
+        
+        # Add a 'day' key for compatibility with the template
+        schedule_dict['day'] = schedule_dict['day_of_week']
+        
+        # Add a 'status' key for compatibility with the template
+        schedule_dict['status'] = 'Available' if schedule_dict['is_available'] else 'Unavailable'
+        
+        return render_template('edit_schedule.html', schedule=schedule_dict, labs=labs)
+        
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+        return redirect(url_for('admin_lab_schedule'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/delete_schedule/<int:schedule_id>', methods=['POST'])
+def delete_schedule(schedule_id):
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if schedule exists
+        cursor.execute('SELECT schedule_id FROM lab_schedules WHERE schedule_id = ?', (schedule_id,))
+        if not cursor.fetchone():
+            flash('Schedule not found', 'danger')
+            return redirect(url_for('admin_lab_schedule'))
+        
+        # Delete schedule
+        cursor.execute('DELETE FROM lab_schedules WHERE schedule_id = ?', (schedule_id,))
+        conn.commit()
+        
+        flash('Schedule deleted successfully', 'success')
+        return redirect(url_for('admin_lab_schedule'))
+    except Exception as e:
+        flash(f'Error deleting schedule: {str(e)}', 'danger')
+        return redirect(url_for('admin_lab_schedule'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/add_laboratory', methods=['POST'])
+def add_laboratory():
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        building = request.form.get('building')
+        room_number = request.form.get('room_number')
+        capacity = request.form.get('capacity')
+        equipment = request.form.get('equipment', '')
+        
+        # Validate inputs
+        if not all([building, room_number, capacity]):
+            flash('Building, room number, and capacity are required', 'danger')
+            return redirect(url_for('admin_lab_schedule'))
+        
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Check if laboratory already exists
+            cursor.execute('''
+                SELECT * FROM laboratories 
+                WHERE building = ? AND room_number = ?
+            ''', (building, room_number))
+            
+            if cursor.fetchone():
+                flash('Laboratory already exists', 'danger')
+                return redirect(url_for('admin_lab_schedule'))
+            
+            # Insert new laboratory - remove software
+            cursor.execute('''
+                INSERT INTO laboratories (building, room_number, capacity, equipment)
+                VALUES (?, ?, ?, ?)
+            ''', (building, room_number, capacity, equipment))
+            
+            conn.commit()
+            flash('Laboratory added successfully', 'success')
+            
+        except Exception as e:
+            flash(f'Error adding laboratory: {str(e)}', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return redirect(url_for('admin_lab_schedule'))
+
+@app.route('/edit_laboratory/<int:lab_id>', methods=['GET', 'POST'])
+def edit_laboratory(lab_id):
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if request.method == 'POST':
+        building = request.form.get('building')
+        room_number = request.form.get('room_number')
+        capacity = request.form.get('capacity')
+        equipment = request.form.get('equipment', '')
+        
+        # Validate inputs
+        if not all([building, room_number, capacity]):
+            flash('Building, room number, and capacity are required', 'danger')
+            return redirect(url_for('edit_laboratory', lab_id=lab_id))
+        
+        try:
+            # Check if another laboratory with same building/room exists
+            cursor.execute('''
+                SELECT * FROM laboratories 
+                WHERE building = ? AND room_number = ? AND lab_id != ?
+            ''', (building, room_number, lab_id))
+            
+            if cursor.fetchone():
+                flash('Another laboratory with this building and room number already exists', 'danger')
+                return redirect(url_for('edit_laboratory', lab_id=lab_id))
+            
+            # Update laboratory - remove software
+            cursor.execute('''
+                UPDATE laboratories 
+                SET building = ?, room_number = ?, capacity = ?, equipment = ?
+                WHERE lab_id = ?
+            ''', (building, room_number, capacity, equipment, lab_id))
+            
+            conn.commit()
+            flash('Laboratory updated successfully', 'success')
+            return redirect(url_for('admin_lab_schedule'))
+            
+        except Exception as e:
+            flash(f'Error updating laboratory: {str(e)}', 'danger')
+            return redirect(url_for('edit_laboratory', lab_id=lab_id))
+    
+    # GET request - Display edit form
+    try:
+        cursor.execute('SELECT * FROM laboratories WHERE lab_id = ?', (lab_id,))
+        lab = cursor.fetchone()
+        
+        if not lab:
+            flash('Laboratory not found', 'danger')
+            return redirect(url_for('admin_lab_schedule'))
+        
+        return render_template('edit_laboratory.html', lab=dict(lab))
+        
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'danger')
+        return redirect(url_for('admin_lab_schedule'))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/delete_laboratory/<int:lab_id>', methods=['POST'])
+def delete_laboratory(lab_id):
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if laboratory exists
+        cursor.execute('SELECT lab_id FROM laboratories WHERE lab_id = ?', (lab_id,))
+        if not cursor.fetchone():
+            flash('Laboratory not found', 'danger')
+            return redirect(url_for('admin_lab_schedule'))
+        
+        # Check if there are schedules using this laboratory
+        cursor.execute('SELECT schedule_id FROM lab_schedules WHERE lab_id = ?', (lab_id,))
+        schedules = cursor.fetchall()
+        
+        # Begin transaction
+        conn.execute('BEGIN TRANSACTION')
+        
+        # Delete all related schedules
+        if schedules:
+            schedule_ids = [s[0] for s in schedules]
+            
+            for schedule_id in schedule_ids:
+                # Delete the schedule
+                cursor.execute('DELETE FROM lab_schedules WHERE schedule_id = ?', (schedule_id,))
+        
+        # Delete the laboratory
+        cursor.execute('DELETE FROM laboratories WHERE lab_id = ?', (lab_id,))
+        
+        # Commit transaction
+        conn.commit()
+        
+        flash('Laboratory and associated schedules deleted successfully', 'success')
+        return redirect(url_for('admin_lab_schedule'))
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        flash(f'Error deleting laboratory: {str(e)}', 'danger')
+        return redirect(url_for('admin_lab_schedule'))
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@app.route('/upload_schedule', methods=['POST'])
+def upload_schedule():
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    if 'schedule_file' not in request.files:
+        flash('No file part', 'danger')
+        return redirect(url_for('admin_lab_schedule'))
+    
+    file = request.files['schedule_file']
+    if file.filename == '':
+        flash('No selected file', 'danger')
+        return redirect(url_for('admin_lab_schedule'))
+    
+    if file and file.filename.endswith('.csv'):
+        try:
+            # Read the CSV file
+            csv_data = file.read().decode('utf-8')
+            csv_reader = csv.reader(csv_data.splitlines())
+            
+            # Skip header row
+            next(csv_reader)
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            success_count = 0
+            error_count = 0
+            
+            for row in csv_reader:
+                if len(row) < 5:  # lab_id, day, start_time, end_time, status
+                    error_count += 1
+                    continue
+                
+                lab_id, day, start_time, end_time, status = row
+                
+                # Validate day
+                valid_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+                if day not in valid_days:
+                    error_count += 1
+                    continue
+                
+                # Validate times
+                try:
+                    # Ensure valid time format
+                    datetime.strptime(start_time, '%H:%M')
+                    datetime.strptime(end_time, '%H:%M')
+                    
+                    # Check if end time is after start time
+                    if start_time >= end_time:
+                        error_count += 1
+                        continue
+                except ValueError:
+                    error_count += 1
+                    continue
+                
+                # Validate status
+                valid_statuses = ['Available', 'Unavailable']
+                if status not in valid_statuses:
+                    error_count += 1
+                    continue
+                
+                # Check if laboratory exists
+                cursor.execute('SELECT id FROM laboratories WHERE id = ?', (lab_id,))
+                if not cursor.fetchone():
+                    error_count += 1
+                    continue
+                
+                # Check for scheduling conflicts
+                cursor.execute('''
+                    SELECT * FROM lab_schedules 
+                    WHERE lab_id = ? AND day = ? AND 
+                    ((start_time <= ? AND end_time > ?) OR
+                     (start_time < ? AND end_time >= ?) OR
+                     (start_time >= ? AND end_time <= ?))
+                ''', (lab_id, day, start_time, start_time, end_time, end_time, start_time, end_time))
+                
+                if cursor.fetchone():
+                    error_count += 1
+                    continue
+                
+                # Insert new schedule
+                cursor.execute('''
+                    INSERT INTO lab_schedules (lab_id, day, start_time, end_time, status)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (lab_id, day, start_time, end_time, status))
+                
+                success_count += 1
+            
+            conn.commit()
+            
+            if success_count > 0:
+                flash(f'Successfully imported {success_count} schedules', 'success')
+            if error_count > 0:
+                flash(f'Failed to import {error_count} schedules due to validation errors', 'warning')
+            
+        except Exception as e:
+            flash(f'Error importing schedules: {str(e)}', 'danger')
+        finally:
+            cursor.close()
+            conn.close()
+    else:
+        flash('File must be a CSV', 'danger')
+    
+    return redirect(url_for('admin_lab_schedule'))
+
+@app.route('/download_schedule_template')
+def download_schedule_template():
+    # Check if user is logged in and is admin
+    if 'user' not in session or session.get('is_admin') != True:
+        flash('Access denied: Admin login required', 'danger')
+        return redirect(url_for('home'))
+    
+    # Create a CSV in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(['lab_id', 'day_of_week', 'start_time', 'end_time', 'is_available', 'reserved_for'])
+    
+    # Write example rows
+    writer.writerow(['1', 'Monday', '08:00', '10:00', '1', ''])
+    writer.writerow(['1', 'Monday', '10:00', '12:00', '1', 'BSIT 3'])
+    writer.writerow(['2', 'Tuesday', '13:00', '15:00', '0', 'Faculty'])
+    
+    # Prepare response
+    response = make_response(output.getvalue())
+    response.headers["Content-Disposition"] = "attachment; filename=schedule_template.csv"
+    response.headers["content-type"] = "text/csv"
+    
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True)

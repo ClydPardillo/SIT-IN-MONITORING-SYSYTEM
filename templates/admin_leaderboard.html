@@ -38,7 +38,12 @@
         </li>
         <li>
           <a href="{{ url_for('admin_lab_resources') }}"
-            ><i class="fa fa-book"></i> Lab Resources</a
+            ><i class="fa fa-desktop"></i> Lab Resources</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_schedule') }}"
+            ><i class="fa fa-calendar"></i> Lab Schedule</a
           >
         </li>
         <li>
@@ -89,10 +94,13 @@
     <!-- Most Active Students Leaderboard -->
     <div class="content-row">
       <div class="schedule-card" style="flex: 1; margin-right: 15px">
-        <h4>
-          <i class="fa fa-bolt" aria-hidden="true" style="margin-right: 5px"></i>
-          Most Active Students
-        </h4>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h4>
+            <i class="fa fa-bolt" aria-hidden="true" style="margin-right: 5px"></i>
+            Most Active Students
+          </h4>
+          <span style="font-size: 14px; color: #666;">(Top 5)</span>
+        </div>
         
         {% if most_active_students %}
         <div style="overflow-x: auto">
@@ -107,9 +115,9 @@
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="activeStudentsTable">
               {% for student in most_active_students %}
-              <tr class="{% if loop.index <= 3 %}highlight-row{% endif %}">
+              <tr class="{% if loop.index <= 3 %}highlight-row{% endif %} {% if loop.index > 5 %}hidden-row active-student-row{% endif %}">
                 <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center">
                   {% if loop.index == 1 %}
                   <i class="fa fa-trophy" style="color: gold; font-size: 1.2em;"></i>
@@ -147,6 +155,14 @@
               {% endfor %}
             </tbody>
           </table>
+          
+          {% if most_active_students|length > 5 %}
+          <div style="text-align: center; margin-top: 15px;">
+            <button id="viewAllActiveBtn" class="view-all-btn" onclick="toggleActiveStudents()">
+              <i class="fa fa-list"></i> View All ({{ most_active_students|length }})
+            </button>
+          </div>
+          {% endif %}
         </div>
         {% else %}
         <div style="text-align: center; padding: 30px; color: #666">
@@ -160,10 +176,13 @@
     <!-- Top Performers by Behavior Points -->
     <div class="content-row" style="margin-top: 30px">
       <div class="schedule-card" style="flex: 1;">
-        <h4>
-          <i class="fa fa-star" aria-hidden="true" style="margin-right: 5px"></i>
-          Top Performers by Behavior Points
-        </h4>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h4>
+            <i class="fa fa-star" aria-hidden="true" style="margin-right: 5px"></i>
+            Top Performers by Behavior Points
+          </h4>
+          <span style="font-size: 14px; color: #666;">(Top 5)</span>
+        </div>
         
         {% if top_performers %}
         <div style="overflow-x: auto">
@@ -181,9 +200,9 @@
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="pointsStudentsTable">
               {% for student in top_performers %}
-              <tr class="{% if loop.index <= 3 %}highlight-row{% endif %}">
+              <tr class="{% if loop.index <= 3 %}highlight-row{% endif %} {% if loop.index > 5 %}hidden-row points-student-row{% endif %}">
                 <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center">
                   {% if loop.index == 1 %}
                   <i class="fa fa-trophy" style="color: gold; font-size: 1.2em;"></i>
@@ -224,6 +243,14 @@
               {% endfor %}
             </tbody>
           </table>
+          
+          {% if top_performers|length > 5 %}
+          <div style="text-align: center; margin-top: 15px;">
+            <button id="viewAllPointsBtn" class="view-all-btn" onclick="togglePointsStudents()">
+              <i class="fa fa-list"></i> View All ({{ top_performers|length }})
+            </button>
+          </div>
+          {% endif %}
         </div>
         {% else %}
         <div style="text-align: center; padding: 30px; color: #666">
@@ -243,6 +270,81 @@
   .highlight-row:hover {
     background-color: #f0fff0;
   }
+  
+  .view-all-btn {
+    background-color: #f1f1f1;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #555;
+    transition: all 0.3s;
+  }
+  
+  .view-all-btn:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .view-all-btn i {
+    margin-right: 5px;
+  }
+  
+  .hidden-row {
+    display: none;
+  }
 </style>
+
+<script>
+  // View all active students functionality
+  function toggleActiveStudents() {
+    const button = document.getElementById('viewAllActiveBtn');
+    const rows = document.querySelectorAll('.active-student-row');
+    
+    // Check if rows are currently hidden
+    const isHidden = rows[0].classList.contains('hidden-row');
+    
+    // Toggle visibility
+    rows.forEach(row => {
+      if (isHidden) {
+        row.classList.remove('hidden-row');
+      } else {
+        row.classList.add('hidden-row');
+      }
+    });
+    
+    // Update button text
+    if (isHidden) {
+      button.innerHTML = '<i class="fa fa-chevron-up"></i> Show Less';
+    } else {
+      button.innerHTML = '<i class="fa fa-list"></i> View All ({{ most_active_students|length }})';
+    }
+  }
+  
+  // View all points students functionality
+  function togglePointsStudents() {
+    const button = document.getElementById('viewAllPointsBtn');
+    const rows = document.querySelectorAll('.points-student-row');
+    
+    // Check if rows are currently hidden
+    const isHidden = rows[0].classList.contains('hidden-row');
+    
+    // Toggle visibility
+    rows.forEach(row => {
+      if (isHidden) {
+        row.classList.remove('hidden-row');
+      } else {
+        row.classList.add('hidden-row');
+      }
+    });
+    
+    // Update button text
+    if (isHidden) {
+      button.innerHTML = '<i class="fa fa-chevron-up"></i> Show Less';
+    } else {
+      button.innerHTML = '<i class="fa fa-list"></i> View All ({{ top_performers|length }})';
+    }
+  }
+</script>
 
 {% endblock %} 

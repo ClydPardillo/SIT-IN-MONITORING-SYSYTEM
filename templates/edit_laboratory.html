@@ -1,0 +1,166 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('admin_dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Admin Dashboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}"
+            ><i class="fa fa-users"></i> Current Sit-In</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            ><i class="fa fa-list-alt"></i> View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}"
+            ><i class="fa fa-bullhorn"></i> Announcements</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_resources') }}"
+            ><i class="fa fa-desktop"></i> Lab Resources</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_schedule') }}" class="active"
+            ><i class="fa fa-calendar"></i> Lab Schedule</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}"
+            ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
+          >
+        </li>
+        <li style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System</a
+          >
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Edit Laboratory</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a href="{{ url_for('admin_lab_schedule') }}" class="Btn" style="background-color: #4caf50;">
+          <div class="sign">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+          </div>
+          <div class="text">Back</div>
+        </a>
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Edit Laboratory Form -->
+    <div class="content-row">
+      <div class="schedule-card" style="max-width: 600px; margin: 0 auto;">
+        <h4>
+          <i class="fa fa-desktop" aria-hidden="true" style="margin-right: 5px"></i>
+          Edit Laboratory Details
+        </h4>
+        <form action="{{ url_for('edit_laboratory', lab_id=lab.lab_id) }}" method="POST">
+          <div class="form-group">
+            <label for="building">Building:</label>
+            <input type="text" name="building" id="building" class="form-control" value="{{ lab.building }}" required>
+          </div>
+          <div class="form-group">
+            <label for="room_number">Room Number:</label>
+            <input type="text" name="room_number" id="room_number" class="form-control" value="{{ lab.room_number }}" required>
+          </div>
+          <div class="form-group">
+            <label for="capacity">Capacity:</label>
+            <input type="number" name="capacity" id="capacity" class="form-control" value="{{ lab.capacity }}" min="1" required>
+          </div>
+          <div class="form-group">
+            <label for="equipment">Equipment:</label>
+            <textarea name="equipment" id="equipment" class="form-control" rows="3">{{ lab.equipment }}</textarea>
+          </div>
+          <div class="form-group" style="display: flex; gap: 10px; justify-content: center;">
+            <button type="submit" class="submit-btn">Save Changes</button>
+            <a href="{{ url_for('admin_lab_schedule') }}" class="cancel-btn">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  
+  .submit-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  
+  .cancel-btn {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+    display: inline-block;
+  }
+  
+  .submit-btn:hover {
+    background-color: #45a049;
+  }
+  
+  .cancel-btn:hover {
+    background-color: #d32f2f;
+  }
+</style>
+
+{% endblock %} 

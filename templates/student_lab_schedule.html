@@ -1,0 +1,680 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Student</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('dashboard') }}">
+            <i class="fa fa-dashboard"></i> Dashboard
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('profile') }}">
+            <i class="fa fa-user"></i> Profile
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_lab_schedule') }}" class="active">
+            <i class="fa fa-calendar"></i> Lab Schedule
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('sit_in_history') }}">
+            <i class="fa fa-history"></i> Sit-in History
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('remaining_sessions') }}">
+            <i class="fa fa-clock-o"></i> Remaining Sessions
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('lab_resources') }}">
+            <i class="fa fa-book"></i> Lab Resources
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('reservation') }}">
+            <i class="fa fa-calendar"></i> Reservation
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Lab Schedule</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Weekly Schedule View -->
+    <div class="content-row">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i class="fa fa-calendar" aria-hidden="true" style="margin-right: 5px"></i>
+          Weekly Lab Schedule
+        </h4>
+        <div class="filter-group">
+          <div class="filter-item">
+            <label for="labSelector">Laboratory:</label>
+            <select id="labSelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Laboratories</option>
+              {% for lab in labs %}
+              <option value="{{ lab.lab_id }}">{{ lab.building }} - Room {{ lab.room_number }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="daySelector">Day:</label>
+            <select id="daySelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Days</option>
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="statusSelector">Status:</label>
+            <select id="statusSelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Statuses</option>
+              <option value="Available">Available</option>
+              <option value="Unavailable">Unavailable</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Schedule Table -->
+        <div class="schedule-container">
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th>Laboratory</th>
+                <th>Day</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Reserved For</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for schedule in schedules %}
+              <tr class="schedule-row" 
+                  data-lab-id="{{ schedule.lab_id }}" 
+                  data-day="{{ schedule.day }}" 
+                  data-status="{{ 'Available' if schedule.is_available else 'Unavailable' }}">
+                <td>
+                  <span class="lab-badge">{{ schedule.building }} {{ schedule.room_number }}</span>
+                </td>
+                <td>{{ schedule.day }}</td>
+                <td>{{ schedule.start_time|format_time }} - {{ schedule.end_time|format_time }}</td>
+                <td>
+                  <span class="status-badge status-{{ 'available' if schedule.is_available else 'unavailable' }}">
+                    {% if schedule.is_available %}Available{% else %}Unavailable{% endif %}
+                  </span>
+                </td>
+                <td>{{ schedule.reserved_for if schedule.reserved_for else 'N/A' }}</td>
+                <td class="actions-cell">
+                  {% if schedule.is_available %}
+                  <button class="reserve-btn" onclick="showReservationModal('{{ schedule.schedule_id }}')">
+                    <i class="fa fa-calendar-plus-o"></i> Reserve
+                  </button>
+                  {% else %}
+                  <span class="unavailable-text">Not Available</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          
+          {% if not schedules %}
+          <div class="empty-message">
+            <i class="fa fa-info-circle"></i>
+            <p>No lab schedules are available at the moment.</p>
+            <p class="sub-message">Please check back later or contact the administrator.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Available Laboratories -->
+    <div class="content-row" style="margin-top: 30px;">
+      <div class="lab-card">
+        <div class="card-header">
+          <h4>
+            <i class="fa fa-desktop" aria-hidden="true" style="margin-right: 5px"></i>
+            Laboratory Information
+          </h4>
+        </div>
+        
+        <div class="lab-grid">
+          {% for lab in labs %}
+          <div class="lab-item">
+            <div class="lab-header">
+              <h3>{{ lab.building }}</h3>
+              <div class="lab-room">Room {{ lab.room_number }}</div>
+            </div>
+            <div class="lab-details">
+              <div class="lab-detail">
+                <i class="fa fa-desktop"></i>
+                <span>Capacity: {{ lab.capacity }} workstations</span>
+              </div>
+              <div class="lab-detail">
+                <i class="fa fa-tools"></i>
+                <span>Equipment: {{ lab.equipment }}</span>
+              </div>
+            </div>
+            <div class="lab-action">
+              <button class="view-schedule-btn" onclick="focusLab('{{ lab.lab_id }}')">
+                <i class="fa fa-calendar"></i> View Schedule
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+          
+          {% if not labs %}
+          <div class="no-labs-message">
+            <i class="fa fa-info-circle"></i>
+            <p>No laboratories have been added yet.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reservation Modal -->
+<div id="reservationModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Reserve Laboratory</h3>
+      <span class="close" id="closeReservationModal">&times;</span>
+    </div>
+    <div class="modal-body">
+      <form id="reservationForm" action="{{ url_for('reserve_schedule') }}" method="POST">
+        <input type="hidden" id="schedule_id" name="schedule_id">
+        <div class="form-group">
+          <label for="purpose">Purpose of Reservation:</label>
+          <select name="purpose" id="purpose" class="form-control" required>
+            <option value="">Select Purpose</option>
+            <option value="Project Work">Project Work</option>
+            <option value="Study/Practice">Study/Practice</option>
+            <option value="Assignment">Assignment</option>
+            <option value="Research">Research</option>
+            <option value="Other">Other (specify below)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="notes">Additional Notes:</label>
+          <textarea name="notes" id="notes" class="form-control" rows="4" placeholder="Enter any additional details about your reservation..."></textarea>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="submit-btn">Confirm Reservation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 25px;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  .filter-item {
+    flex: 1;
+    min-width: 200px;
+  }
+  
+  .filter-item label {
+    display: block;
+    margin-bottom: 8px;
+    color: #444;
+    font-size: 0.9em;
+    font-weight: 500;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: white;
+  }
+  
+  .form-control:focus {
+    border-color: #4caf50;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+  }
+  
+  .schedule-container {
+    overflow-x: auto;
+    margin-bottom: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    background-color: #fff;
+  }
+  
+  .schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .schedule-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    padding: 12px 15px;
+    color: #444;
+    font-size: 0.9em;
+    text-align: left;
+    border-bottom: 2px solid #e0e0e0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .schedule-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #e9ecef;
+    text-align: left;
+    vertical-align: middle;
+  }
+  
+  .schedule-row:hover {
+    background-color: #f5f8ff;
+  }
+  
+  .lab-badge {
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: white;
+  }
+  
+  .status-available {
+    background-color: #4caf50;
+  }
+  
+  .status-unavailable {
+    background-color: #f44336;
+  }
+  
+  .actions-cell {
+    white-space: nowrap;
+  }
+  
+  .reserve-btn {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.85em;
+    transition: background-color 0.2s;
+  }
+  
+  .reserve-btn:hover {
+    background-color: #1976D2;
+  }
+  
+  .unavailable-text {
+    color: #888;
+    font-size: 0.85em;
+    font-style: italic;
+  }
+  
+  .empty-message {
+    text-align: center;
+    padding: 30px;
+    color: #666;
+  }
+  
+  .empty-message i {
+    font-size: 2em;
+    color: #4caf50;
+    margin-bottom: 10px;
+  }
+  
+  .empty-message .sub-message {
+    font-size: 0.9em;
+    color: #888;
+    margin-top: 5px;
+  }
+  
+  /* Laboratory Card Styles */
+  .lab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 10px;
+  }
+  
+  .lab-item {
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  
+  .lab-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  }
+  
+  .lab-header {
+    background: linear-gradient(135deg, #3949ab, #1e88e5);
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    color: white;
+  }
+  
+  .lab-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 18px;
+  }
+  
+  .lab-room {
+    display: inline-block;
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 15px;
+    margin-top: 8px;
+    font-size: 14px;
+    backdrop-filter: blur(2px);
+  }
+  
+  .lab-details {
+    padding: 20px;
+  }
+  
+  .lab-detail {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: flex-start;
+  }
+  
+  .lab-detail i {
+    width: 20px;
+    color: #3949ab;
+    margin-right: 12px;
+    margin-top: 3px;
+  }
+  
+  .lab-detail span {
+    font-size: 14px;
+    color: #555;
+    flex: 1;
+  }
+  
+  .lab-action {
+    padding: 0 20px 20px;
+  }
+  
+  .view-schedule-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(to right, #3949ab, #1e88e5);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  .view-schedule-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(30, 136, 229, 0.3);
+  }
+  
+  .no-labs-message {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 50px;
+    background-color: #f9f9f9;
+    border-radius: 10px;
+    color: #666;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  .no-labs-message i {
+    font-size: 3em;
+    color: #3949ab;
+    margin-bottom: 15px;
+    opacity: 0.8;
+  }
+  
+  /* Modal styles */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+  
+  .modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    max-width: 500px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  .modal-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .modal-header h3 {
+    margin: 0;
+    color: #333;
+  }
+  
+  .close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .close:hover {
+    color: #333;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .form-group {
+    margin-bottom: 15px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+  }
+  
+  .submit-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100%;
+  }
+  
+  .submit-btn:hover {
+    background-color: #45a049;
+  }
+</style>
+
+<script>
+  // Filter functions
+  function filterSchedule() {
+    const labId = document.getElementById('labSelector').value;
+    const day = document.getElementById('daySelector').value;
+    const status = document.getElementById('statusSelector').value;
+    
+    const scheduleRows = document.querySelectorAll('.schedule-row');
+    scheduleRows.forEach(row => {
+      const itemLabId = row.getAttribute('data-lab-id');
+      const itemDay = row.getAttribute('data-day');
+      const itemStatus = row.getAttribute('data-status');
+      
+      const labMatch = labId === 'all' || itemLabId === labId;
+      const dayMatch = day === 'all' || itemDay === day;
+      const statusMatch = status === 'all' || itemStatus === status;
+      
+      if (labMatch && dayMatch && statusMatch) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+  
+  // Focus on a specific lab in the schedule table
+  function focusLab(labId) {
+    document.getElementById('labSelector').value = labId;
+    filterSchedule();
+    // Scroll to the schedule table
+    document.querySelector('.schedule-container').scrollIntoView({ behavior: 'smooth' });
+  }
+  
+  // Reservation modal functionality
+  const reservationModal = document.getElementById("reservationModal");
+  const closeReservationModal = document.getElementById("closeReservationModal");
+  
+  function showReservationModal(scheduleId) {
+    document.getElementById('schedule_id').value = scheduleId;
+    reservationModal.style.display = "block";
+  }
+  
+  if (closeReservationModal) {
+    closeReservationModal.addEventListener("click", function() {
+      reservationModal.style.display = "none";
+    });
+  }
+  
+  // Close modal when clicking outside
+  window.addEventListener("click", function(event) {
+    if (event.target === reservationModal) {
+      reservationModal.style.display = "none";
+    }
+  });
+  
+  // Sort schedule table by day (Monday-Friday first) and time
+  document.addEventListener('DOMContentLoaded', function() {
+    sortScheduleTable();
+    
+    // Initial filter application
+    filterSchedule();
+  });
+  
+  function sortScheduleTable() {
+    const tbody = document.querySelector('.schedule-table tbody');
+    if (!tbody) return;
+    
+    const rows = Array.from(tbody.querySelectorAll('tr.schedule-row'));
+    
+    // Define day order
+    const dayOrder = {
+      'Monday': 1,
+      'Tuesday': 2,
+      'Wednesday': 3,
+      'Thursday': 4,
+      'Friday': 5,
+      'Saturday': 6,
+      'Sunday': 7
+    };
+    
+    // Sort rows by day and then by time
+    rows.sort((a, b) => {
+      const dayA = a.cells[1].textContent.trim();
+      const dayB = b.cells[1].textContent.trim();
+      
+      // Sort by day first
+      if (dayOrder[dayA] !== dayOrder[dayB]) {
+        return dayOrder[dayA] - dayOrder[dayB];
+      }
+      
+      // If days are the same, sort by time
+      const timeA = a.cells[2].textContent.trim();
+      const timeB = b.cells[2].textContent.trim();
+      
+      // Extract start times for comparison (format: "HH:MM AM/PM - HH:MM AM/PM")
+      const startTimeA = timeA.split(' - ')[0];
+      const startTimeB = timeB.split(' - ')[0];
+      
+      return startTimeA.localeCompare(startTimeB);
+    });
+    
+    // Clear and reattach sorted rows
+    rows.forEach(row => tbody.appendChild(row));
+  }
+</script>
+
+{% endblock %} 

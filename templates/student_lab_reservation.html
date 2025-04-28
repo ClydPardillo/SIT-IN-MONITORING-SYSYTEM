@@ -1,0 +1,701 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Student</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('student_dashboard') }}">
+            <i class="fa fa-dashboard"></i> Dashboard
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_profile') }}">
+            <i class="fa fa-user"></i> Profile
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_lab_schedule') }}">
+            <i class="fa fa-calendar"></i> Lab Schedule
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_lab_reservation') }}" class="active">
+            <i class="fa fa-bookmark"></i> Lab Reservation
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_sitin_history') }}">
+            <i class="fa fa-history"></i> Sit-in History
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_announcements') }}">
+            <i class="fa fa-bullhorn"></i> Announcements
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_lab_resources') }}">
+            <i class="fa fa-book"></i> Lab Resources
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_feedback') }}">
+            <i class="fa fa-comments"></i> Feedback
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Lab Reservation</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Reservation Form Section -->
+    <div class="content-row">
+      <div class="reservation-card">
+        <h4>
+          <i class="fa fa-calendar-plus-o" aria-hidden="true" style="margin-right: 5px"></i>
+          Reserve a Laboratory
+        </h4>
+        
+        <form id="reservationForm" method="POST" action="{{ url_for('submit_reservation') }}">
+          <div class="form-group">
+            <label for="laboratorySelect">Select Laboratory:</label>
+            <select id="laboratorySelect" name="laboratory_id" class="form-control" required>
+              <option value="">-- Select Laboratory --</option>
+              {% for lab in labs %}
+              <option value="{{ lab.id }}">{{ lab.name }} ({{ lab.room_number }}) - Capacity: {{ lab.capacity }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="dateSelect">Select Date:</label>
+            <input type="date" id="dateSelect" name="reservation_date" class="form-control" required min="{{ today }}">
+          </div>
+          
+          <div class="form-group">
+            <label for="timeSlotSelect">Select Time Slot:</label>
+            <select id="timeSlotSelect" name="time_slot" class="form-control" required>
+              <option value="">-- Select Time Slot --</option>
+              {% for slot in time_slots %}
+              <option value="{{ slot.start_time }}-{{ slot.end_time }}">{{ slot.start_time }} - {{ slot.end_time }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="purposeInput">Purpose of Reservation:</label>
+            <textarea id="purposeInput" name="purpose" class="form-control" rows="3" required placeholder="Explain why you need to use the laboratory"></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label for="participantsInput">Number of Participants:</label>
+            <input type="number" id="participantsInput" name="participants" class="form-control" min="1" max="50" required>
+            <small class="form-text text-muted">Maximum capacity for selected lab will be validated</small>
+          </div>
+          
+          <div class="form-group">
+            <label for="equipmentNeeded">Equipment Needed:</label>
+            <textarea id="equipmentNeeded" name="equipment_needed" class="form-control" rows="2" placeholder="List any specific equipment you'll need (optional)"></textarea>
+          </div>
+          
+          <div class="form-check">
+            <input type="checkbox" id="termsCheck" class="form-check-input" required>
+            <label for="termsCheck" class="form-check-label">
+              I agree to follow the laboratory rules and regulations
+            </label>
+          </div>
+          
+          <div class="form-actions">
+            <button type="submit" class="submit-btn">
+              <i class="fa fa-check"></i> Submit Reservation
+            </button>
+            <button type="reset" class="reset-btn">
+              <i class="fa fa-refresh"></i> Reset Form
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- My Reservations Section -->
+    <div class="content-row" style="margin-top: 30px;">
+      <div class="reservations-card">
+        <div class="card-header">
+          <h4>
+            <i class="fa fa-list" aria-hidden="true" style="margin-right: 5px"></i>
+            My Reservations
+          </h4>
+        </div>
+        
+        <div class="reservations-table-container">
+          <table class="reservations-table">
+            <thead>
+              <tr>
+                <th>Laboratory</th>
+                <th>Date</th>
+                <th>Time Slot</th>
+                <th>Purpose</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for reservation in reservations %}
+              <tr>
+                <td>{{ reservation.lab_name }} ({{ reservation.room_number }})</td>
+                <td>{{ reservation.date }}</td>
+                <td>{{ reservation.time_slot }}</td>
+                <td>{{ reservation.purpose }}</td>
+                <td>
+                  <span class="status-badge status-{{ reservation.status }}">
+                    {{ reservation.status | capitalize }}
+                  </span>
+                </td>
+                <td class="actions-column">
+                  <button class="view-btn" onclick="viewReservation('{{ reservation.id }}')">
+                    <i class="fa fa-eye"></i>
+                  </button>
+                  {% if reservation.status == 'pending' %}
+                  <button class="edit-btn" onclick="editReservation('{{ reservation.id }}')">
+                    <i class="fa fa-pencil"></i>
+                  </button>
+                  <button class="cancel-btn" onclick="confirmCancelReservation('{{ reservation.id }}')">
+                    <i class="fa fa-times"></i>
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+              
+              {% if not reservations %}
+              <tr>
+                <td colspan="6" class="no-data">
+                  <div class="no-data-message">
+                    <i class="fa fa-info-circle"></i>
+                    <p>You don't have any reservations yet.</p>
+                  </div>
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Reservation Guidelines Section -->
+    <div class="content-row" style="margin-top: 30px;">
+      <div class="guidelines-card">
+        <div class="card-header">
+          <h4>
+            <i class="fa fa-info-circle" aria-hidden="true" style="margin-right: 5px"></i>
+            Reservation Guidelines
+          </h4>
+        </div>
+        
+        <div class="guidelines-content">
+          <ul class="guidelines-list">
+            <li>
+              <i class="fa fa-clock-o"></i>
+              <div>
+                <strong>Timing:</strong> Reservations must be made at least 24 hours in advance. Maximum reservation duration is 4 hours.
+              </div>
+            </li>
+            <li>
+              <i class="fa fa-users"></i>
+              <div>
+                <strong>Capacity:</strong> The number of participants must not exceed the laboratory's capacity.
+              </div>
+            </li>
+            <li>
+              <i class="fa fa-check-circle"></i>
+              <div>
+                <strong>Approval:</strong> All reservations require approval from a laboratory administrator.
+              </div>
+            </li>
+            <li>
+              <i class="fa fa-ban"></i>
+              <div>
+                <strong>Cancellation:</strong> Please cancel reservations at least 12 hours before the scheduled time.
+              </div>
+            </li>
+            <li>
+              <i class="fa fa-exclamation-triangle"></i>
+              <div>
+                <strong>No-show Policy:</strong> Repeated no-shows may result in temporary suspension of reservation privileges.
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div id="viewReservationModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Reservation Details</h3>
+      <span class="close-modal">&times;</span>
+    </div>
+    <div class="modal-body" id="reservationDetails">
+      <!-- Details will be loaded dynamically -->
+    </div>
+  </div>
+</div>
+
+<div id="cancelReservationModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Cancel Reservation</h3>
+      <span class="close-modal">&times;</span>
+    </div>
+    <div class="modal-body">
+      <p>Are you sure you want to cancel this reservation?</p>
+      <p><strong>Note:</strong> This action cannot be undone.</p>
+      <form id="cancelReservationForm" method="POST" action="{{ url_for('cancel_reservation') }}">
+        <input type="hidden" id="cancelReservationId" name="reservation_id">
+        <div class="form-group">
+          <label for="cancellationReason">Reason for Cancellation:</label>
+          <textarea id="cancellationReason" name="reason" class="form-control" rows="3" required></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="submit-btn">
+            <i class="fa fa-check"></i> Confirm Cancellation
+          </button>
+          <button type="button" class="reset-btn close-btn">
+            <i class="fa fa-times"></i> Never Mind
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Form Styles */
+  .reservation-card, .reservations-card, .guidelines-card {
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-bottom: 20px;
+    width: 100%;
+  }
+  
+  .card-header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #555;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  
+  textarea.form-control {
+    resize: vertical;
+  }
+  
+  .form-text {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+    color: #777;
+  }
+  
+  .form-check {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  
+  .form-check-input {
+    margin-right: 10px;
+  }
+  
+  .form-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  
+  .submit-btn, .reset-btn {
+    padding: 10px 15px;
+    border-radius: 4px;
+    border: none;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+  
+  .submit-btn {
+    background-color: #4caf50;
+    color: white;
+    flex: 2;
+    justify-content: center;
+  }
+  
+  .reset-btn {
+    background-color: #f5f5f5;
+    color: #555;
+    flex: 1;
+    justify-content: center;
+  }
+  
+  .submit-btn:hover {
+    background-color: #43a047;
+  }
+  
+  .reset-btn:hover {
+    background-color: #e0e0e0;
+  }
+  
+  /* Reservations Table */
+  .reservations-table-container {
+    overflow-x: auto;
+  }
+  
+  .reservations-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .reservations-table th, .reservations-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  .reservations-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #444;
+  }
+  
+  .reservations-table tr:hover {
+    background-color: #f9f9f9;
+  }
+  
+  .status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  .status-pending {
+    background-color: #ffecb3;
+    color: #856404;
+  }
+  
+  .status-approved {
+    background-color: #d4edda;
+    color: #155724;
+  }
+  
+  .status-rejected {
+    background-color: #f8d7da;
+    color: #721c24;
+  }
+  
+  .status-cancelled {
+    background-color: #e2e3e5;
+    color: #383d41;
+  }
+  
+  .actions-column {
+    display: flex;
+    gap: 5px;
+  }
+  
+  .view-btn, .edit-btn, .cancel-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  
+  .view-btn {
+    background-color: #2196F3;
+    color: white;
+  }
+  
+  .edit-btn {
+    background-color: #ffc107;
+    color: white;
+  }
+  
+  .cancel-btn {
+    background-color: #f44336;
+    color: white;
+  }
+  
+  .view-btn:hover { background-color: #0b7dda; }
+  .edit-btn:hover { background-color: #e0a800; }
+  .cancel-btn:hover { background-color: #d32f2f; }
+  
+  .no-data {
+    text-align: center;
+    padding: 30px;
+  }
+  
+  .no-data-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #666;
+  }
+  
+  .no-data-message i {
+    font-size: 2em;
+    color: #999;
+    margin-bottom: 10px;
+  }
+  
+  /* Guidelines List */
+  .guidelines-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .guidelines-list li {
+    display: flex;
+    margin-bottom: 15px;
+    align-items: flex-start;
+  }
+  
+  .guidelines-list li i {
+    color: #4caf50;
+    margin-right: 15px;
+    margin-top: 3px;
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+  }
+  
+  .guidelines-list li div {
+    flex: 1;
+  }
+  
+  /* Modal Styles */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .modal-content {
+    background-color: #fff;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    animation: modal-appear 0.3s ease-out;
+  }
+  
+  @keyframes modal-appear {
+    from {
+      opacity: 0;
+      transform: translateY(-50px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .modal-header h3 {
+    margin: 0;
+    color: #333;
+  }
+  
+  .close-modal {
+    font-size: 24px;
+    color: #888;
+    cursor: pointer;
+  }
+  
+  .close-modal:hover {
+    color: #333;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .close-btn {
+    background-color: #f5f5f5;
+  }
+  
+  @media (max-width: 768px) {
+    .form-actions {
+      flex-direction: column;
+    }
+    
+    .submit-btn, .reset-btn {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  // Set minimum date for date input to today
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('dateSelect').setAttribute('min', today);
+  
+  // Check lab capacity when participants count changes
+  document.getElementById('participantsInput').addEventListener('change', function() {
+    const labSelect = document.getElementById('laboratorySelect');
+    if (labSelect.selectedIndex === 0) {
+      alert('Please select a laboratory first');
+      this.value = '';
+      return;
+    }
+    
+    const selectedOption = labSelect.options[labSelect.selectedIndex];
+    const labCapacityStr = selectedOption.text.match(/Capacity: (\d+)/);
+    
+    if (labCapacityStr && labCapacityStr[1]) {
+      const labCapacity = parseInt(labCapacityStr[1]);
+      const participants = parseInt(this.value);
+      
+      if (participants > labCapacity) {
+        alert(`The selected lab can only accommodate ${labCapacity} participants. Please adjust your number or select a different lab.`);
+        this.value = labCapacity;
+      }
+    }
+  });
+  
+  // View Reservation Details
+  function viewReservation(reservationId) {
+    // In a real implementation, this would fetch reservation details from the server
+    // For now, we'll just show a sample modal
+    const modal = document.getElementById('viewReservationModal');
+    const detailsContainer = document.getElementById('reservationDetails');
+    
+    // Sample content - in real implementation, this would be populated with data from server
+    detailsContainer.innerHTML = `
+      <div class="reservation-detail-row">
+        <strong>Reservation ID:</strong> ${reservationId}
+      </div>
+      <div class="reservation-detail-row">
+        <strong>Laboratory:</strong> Sample Laboratory (Room 101)
+      </div>
+      <div class="reservation-detail-row">
+        <strong>Date:</strong> ${new Date().toLocaleDateString()}
+      </div>
+      <div class="reservation-detail-row">
+        <strong>Time Slot:</strong> 9:00 AM - 11:00 AM
+      </div>
+      <div class="reservation-detail-row">
+        <strong>Purpose:</strong> Project work for Database Systems
+      </div>
+      <div class="reservation-detail-row">
+        <strong>Participants:</strong> 5
+      </div>
+      <div class="reservation-detail-row">
+        <strong>Equipment Needed:</strong> Projector, whiteboard
+      </div>
+      <div class="reservation-detail-row">
+        <strong>Status:</strong> <span class="status-badge status-pending">Pending</span>
+      </div>
+    `;
+    
+    modal.style.display = 'flex';
+  }
+  
+  // Edit Reservation
+  function editReservation(reservationId) {
+    alert(`Edit functionality for reservation ${reservationId} would be implemented here`);
+    // In a real implementation, this would redirect to an edit form or populate the current form
+  }
+  
+  // Cancel Reservation
+  function confirmCancelReservation(reservationId) {
+    const modal = document.getElementById('cancelReservationModal');
+    document.getElementById('cancelReservationId').value = reservationId;
+    modal.style.display = 'flex';
+  }
+  
+  // Close modals when clicking close button or outside modal
+  document.querySelectorAll('.close-modal, .close-btn').forEach(element => {
+    element.addEventListener('click', function() {
+      document.querySelectorAll('.modal').forEach(modal => {
+        modal.style.display = 'none';
+      });
+    });
+  });
+  
+  // Close modal when clicking outside the modal content
+  window.addEventListener('click', function(event) {
+    document.querySelectorAll('.modal').forEach(modal => {
+      if (event.target === modal) {
+        modal.style.display = 'none';
+      }
+    });
+  });
+</script>
+
+{% endblock %} 

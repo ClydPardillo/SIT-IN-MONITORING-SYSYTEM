@@ -1,0 +1,856 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('admin_dashboard') }}">
+            <i class="fa fa-dashboard"></i> Admin Dashboard
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}">
+            <i class="fa fa-users"></i> Current Sit-In
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}">
+            <i class="fa fa-list-alt"></i> View Sit-in Records
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_leaderboard') }}">
+            <i class="fa fa-trophy"></i> Leaderboard
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}">
+            <i class="fa fa-bullhorn"></i> Announcements
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_resources') }}">
+            <i class="fa fa-desktop"></i> Lab Resources
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_schedule') }}" class="active">
+            <i class="fa fa-calendar"></i> Lab Schedule
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}">
+            <i class="fa fa-file-text"></i> Generate Reports
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}">
+            <i class="fa fa-comments"></i> View Feedback
+          </a>
+        </li>
+        <li style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+          <a href="{{ url_for('admin_system_management') }}">
+            <i class="fa fa-cogs"></i> System
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Manage Lab Schedule</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button id="addScheduleBtn" class="action-btn primary-btn">
+          <i class="fa fa-plus"></i>
+          Add Schedule
+        </button>
+        <button id="addLabBtn" class="action-btn">
+          <i class="fa fa-desktop"></i>
+          Add Laboratory
+        </button>
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Weekly Schedule View -->
+    <div class="content-row">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i class="fa fa-calendar" aria-hidden="true" style="margin-right: 5px"></i>
+          Weekly Schedule View
+        </h4>
+        <div class="filter-group">
+          <div class="filter-item">
+            <label for="labSelector">Laboratory:</label>
+            <select id="labSelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Laboratories</option>
+              {% for lab in labs %}
+              <option value="{{ lab.lab_id }}">{{ lab.building }} - Room {{ lab.room_number }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="daySelector">Day:</label>
+            <select id="daySelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Days</option>
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="statusSelector">Status:</label>
+            <select id="statusSelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Statuses</option>
+              <option value="Available">Available</option>
+              <option value="Reserved">Reserved</option>
+              <option value="Unavailable">Unavailable</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Timetable -->
+        <div class="schedule-container">
+          <table class="schedule-table">
+            <thead>
+              <tr>
+                <th>Laboratory</th>
+                <th>Day</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Reserved For</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for schedule in schedules %}
+              <tr class="schedule-row" 
+                  data-lab-id="{{ schedule.lab_id }}" 
+                  data-day="{{ schedule.day }}" 
+                  data-status="{{ 'Available' if schedule.is_available else 'Unavailable' }}">
+                <td>
+                  <span class="lab-badge">{{ schedule.building }} {{ schedule.room_number }}</span>
+                </td>
+                <td>{{ schedule.day }}</td>
+                <td>{{ schedule.start_time|format_time }} - {{ schedule.end_time|format_time }}</td>
+                <td>
+                  <span class="status-badge status-{{ 'available' if schedule.is_available else 'unavailable' }}">
+                    {% if schedule.is_available %}Available{% else %}Unavailable{% endif %}
+                  </span>
+                </td>
+                <td>{{ schedule.reserved_for if schedule.reserved_for else 'N/A' }}</td>
+                <td class="actions-cell">
+                  <button class="edit-btn" onclick="editSchedule('{{ schedule.schedule_id }}')">
+                    <i class="fa fa-pencil"></i>
+                  </button>
+                  <button class="delete-btn" onclick="deleteSchedule('{{ schedule.schedule_id }}')">
+                    <i class="fa fa-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          
+          {% if not schedules %}
+          <div class="empty-message">
+            <i class="fa fa-info-circle"></i>
+            <p>No lab schedules have been created yet.</p>
+            <p class="sub-message">Click on "Add Schedule" to create your first lab schedule.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    
+    <!-- Manage Laboratories -->
+    <div class="content-row" style="margin-top: 30px;">
+      <div class="lab-card">
+        <div class="card-header">
+          <h4>
+            <i class="fa fa-desktop" aria-hidden="true" style="margin-right: 5px"></i>
+            Manage Laboratories
+          </h4>
+        </div>
+        
+        <div class="table-responsive">
+          <table class="labs-table">
+            <thead>
+              <tr>
+                <th>Building</th>
+                <th>Room Number</th>
+                <th>Capacity</th>
+                <th>Equipment</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lab in labs %}
+              <tr>
+                <td>{{ lab.building }}</td>
+                <td>{{ lab.room_number }}</td>
+                <td>{{ lab.capacity }}</td>
+                <td>{{ lab.equipment }}</td>
+                <td class="action-column">
+                  <button class="edit-btn" onclick="editLab('{{ lab.lab_id }}')">
+                    <i class="fa fa-pencil"></i>
+                  </button>
+                  <button class="delete-btn" onclick="deleteLab('{{ lab.lab_id }}')">
+                    <i class="fa fa-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+              
+              {% if not labs %}
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 20px; color: #666;">
+                  No laboratories have been added yet.
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Schedule Modal -->
+<div id="addScheduleModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Add Schedule</h3>
+      <span class="close" id="closeAddSchedule">&times;</span>
+    </div>
+    <div class="modal-body">
+      <form id="addScheduleForm" action="{{ url_for('add_schedule') }}" method="POST">
+        <div class="form-group">
+          <label for="lab_id">Laboratory:</label>
+          <select name="lab_id" id="lab_id" class="form-control" required>
+            <option value="">Select Laboratory</option>
+            {% for lab in labs %}
+            <option value="{{ lab.lab_id }}">{{ lab.building }} - Room {{ lab.room_number }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="day">Day:</label>
+          <select name="day" id="day" class="form-control" required>
+            <option value="">Select Day</option>
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+            <option value="Friday">Friday</option>
+            <option value="Saturday">Saturday</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="start_time">Start Time:</label>
+          <input type="time" name="start_time" id="start_time" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="end_time">End Time:</label>
+          <input type="time" name="end_time" id="end_time" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="status">Status:</label>
+          <select name="status" id="status" class="form-control" required>
+            <option value="Available">Available</option>
+            <option value="Unavailable">Unavailable</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="reserved_for">Reserved For:</label>
+          <input type="text" name="reserved_for" id="reserved_for" class="form-control" placeholder="Optional">
+        </div>
+        <div class="form-group">
+          <button type="submit" class="submit-btn">Save Schedule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Laboratory Modal -->
+<div id="addLabModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Add Laboratory</h3>
+      <span class="close" id="closeAddLab">&times;</span>
+    </div>
+    <div class="modal-body">
+      <form id="addLabForm" action="{{ url_for('add_laboratory') }}" method="POST">
+        <div class="form-group">
+          <label for="building">Building:</label>
+          <input type="text" name="building" id="building" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="room_number">Room Number:</label>
+          <input type="text" name="room_number" id="room_number" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label for="capacity">Capacity:</label>
+          <input type="number" name="capacity" id="capacity" class="form-control" min="1" required>
+        </div>
+        <div class="form-group">
+          <label for="equipment">Equipment:</label>
+          <textarea name="equipment" id="equipment" class="form-control" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <button type="submit" class="submit-btn">Save Laboratory</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+  .filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .filter-item {
+    flex: 1;
+    min-width: 200px;
+  }
+  
+  .filter-item label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+    font-size: 14px;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  
+  .schedule-container {
+    overflow-x: auto;
+    margin-bottom: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    background-color: #fff;
+  }
+  
+  .schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .schedule-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    padding: 12px 15px;
+    color: #444;
+    font-size: 0.9em;
+    text-align: left;
+    border-bottom: 2px solid #e0e0e0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .schedule-table td {
+    padding: 10px 15px;
+    border-bottom: 1px solid #e9ecef;
+    text-align: left;
+    vertical-align: middle;
+  }
+  
+  .schedule-row:hover {
+    background-color: #f5f8ff;
+  }
+  
+  .lab-badge {
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 500;
+    color: white;
+  }
+  
+  .status-available {
+    background-color: #4caf50;
+  }
+  
+  .status-unavailable {
+    background-color: #f44336;
+  }
+  
+  .actions-cell {
+    white-space: nowrap;
+    display: flex;
+    gap: 8px;
+  }
+  
+  .edit-btn, .delete-btn {
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    color: #555;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+  }
+  
+  .edit-btn:hover {
+    background-color: #e3f2fd;
+    color: #1976d2;
+  }
+  
+  .delete-btn:hover {
+    background-color: #ffebee;
+    color: #d32f2f;
+  }
+  
+  .empty-message {
+    text-align: center;
+    padding: 30px;
+    color: #666;
+  }
+  
+  .empty-message i {
+    font-size: 2em;
+    color: #4caf50;
+    margin-bottom: 10px;
+  }
+  
+  .empty-message .sub-message {
+    font-size: 0.9em;
+    color: #888;
+    margin-top: 5px;
+  }
+  
+  /* Filter styles */
+  .filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 25px;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  .filter-item {
+    flex: 1;
+    min-width: 200px;
+  }
+  
+  .filter-item label {
+    display: block;
+    margin-bottom: 8px;
+    color: #444;
+    font-size: 0.9em;
+    font-weight: 500;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: white;
+  }
+  
+  .form-control:focus {
+    border-color: #4caf50;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+  }
+  
+  /* Laboratory Table */
+  .table-responsive {
+    overflow-x: auto;
+  }
+  
+  .labs-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .labs-table th, .labs-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  .labs-table th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #333;
+  }
+  
+  .labs-table tr:hover {
+    background-color: #f5f5f5;
+  }
+  
+  .action-column {
+    white-space: nowrap;
+    width: 100px;
+  }
+  
+  .action-column .edit-btn, .action-column .delete-btn {
+    background-color: transparent;
+    color: #555;
+    border: 1px solid #ddd;
+  }
+  
+  .action-column .edit-btn:hover {
+    background-color: #f8f9fa;
+    color: #4caf50;
+  }
+  
+  .action-column .delete-btn:hover {
+    background-color: #f8f9fa;
+    color: #f44336;
+  }
+  
+  /* Action Buttons */
+  .action-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #f5f5f5;
+    color: #333;
+  }
+  
+  .primary-btn {
+    background-color: #4caf50;
+    color: white;
+  }
+  
+  .secondary-btn {
+    background-color: #2196F3;
+    color: white;
+  }
+  
+  .action-btn:hover {
+    opacity: 0.9;
+  }
+  
+  /* Modals */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+  
+  .modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    max-width: 500px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  .modal-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .modal-header h3 {
+    margin: 0;
+    color: #333;
+  }
+  
+  .close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  
+  .close:hover {
+    color: #333;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .form-group {
+    margin-bottom: 15px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+  }
+  
+  .form-help {
+    font-size: 12px;
+    color: #777;
+    margin-top: 5px;
+  }
+  
+  .submit-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100%;
+  }
+  
+  .submit-btn:hover {
+    background-color: #45a049;
+  }
+  
+  .template-download {
+    text-align: center;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+  }
+  
+  .download-link {
+    color: #2196F3;
+    text-decoration: none;
+    font-weight: bold;
+  }
+  
+  .download-link:hover {
+    text-decoration: underline;
+  }
+</style>
+
+<script>
+  // Modal Functions
+  const addScheduleModal = document.getElementById("addScheduleModal");
+  const addLabModal = document.getElementById("addLabModal");
+  
+  // Add Schedule Modal
+  document.getElementById("addScheduleBtn").addEventListener("click", function() {
+    addScheduleModal.style.display = "block";
+  });
+  
+  document.getElementById("closeAddSchedule").addEventListener("click", function() {
+    addScheduleModal.style.display = "none";
+  });
+  
+  // Add Lab Modal
+  document.getElementById("addLabBtn").addEventListener("click", function() {
+    addLabModal.style.display = "block";
+  });
+  
+  document.getElementById("closeAddLab").addEventListener("click", function() {
+    addLabModal.style.display = "none";
+  });
+  
+  // Close modals when clicking outside
+  window.addEventListener("click", function(event) {
+    if (event.target === addScheduleModal) {
+      addScheduleModal.style.display = "none";
+    }
+    if (event.target === addLabModal) {
+      addLabModal.style.display = "none";
+    }
+  });
+  
+  // Sort schedule table by day (Monday-Friday first) and time
+  document.addEventListener('DOMContentLoaded', function() {
+    sortScheduleTable();
+    
+    // Initial filter application
+    filterSchedule();
+  });
+  
+  function sortScheduleTable() {
+    const tbody = document.querySelector('.schedule-table tbody');
+    if (!tbody) return;
+    
+    const rows = Array.from(tbody.querySelectorAll('tr.schedule-row'));
+    
+    // Define day order
+    const dayOrder = {
+      'Monday': 1,
+      'Tuesday': 2,
+      'Wednesday': 3,
+      'Thursday': 4,
+      'Friday': 5,
+      'Saturday': 6,
+      'Sunday': 7
+    };
+    
+    // Sort rows by day and then by time
+    rows.sort((a, b) => {
+      const dayA = a.cells[1].textContent.trim();
+      const dayB = b.cells[1].textContent.trim();
+      
+      // Sort by day first
+      if (dayOrder[dayA] !== dayOrder[dayB]) {
+        return dayOrder[dayA] - dayOrder[dayB];
+      }
+      
+      // If days are the same, sort by time
+      const timeA = a.cells[2].textContent.trim();
+      const timeB = b.cells[2].textContent.trim();
+      
+      // Extract start times for comparison (format: "HH:MM AM/PM - HH:MM AM/PM")
+      const startTimeA = timeA.split(' - ')[0];
+      const startTimeB = timeB.split(' - ')[0];
+      
+      // Create Date objects for proper time comparison
+      const [hourA, minuteA, periodA] = startTimeA.match(/(\d+):(\d+)\s+(AM|PM)/).slice(1);
+      const [hourB, minuteB, periodB] = startTimeB.match(/(\d+):(\d+)\s+(AM|PM)/).slice(1);
+      
+      // Convert to 24-hour format for comparison
+      let hourValueA = parseInt(hourA);
+      if (periodA === 'PM' && hourValueA !== 12) hourValueA += 12;
+      if (periodA === 'AM' && hourValueA === 12) hourValueA = 0;
+      
+      let hourValueB = parseInt(hourB);
+      if (periodB === 'PM' && hourValueB !== 12) hourValueB += 12;
+      if (periodB === 'AM' && hourValueB === 12) hourValueB = 0;
+      
+      // Compare hours
+      if (hourValueA !== hourValueB) {
+        return hourValueA - hourValueB;
+      }
+      
+      // If hours are the same, compare minutes
+      return parseInt(minuteA) - parseInt(minuteB);
+    });
+    
+    // Clear and reattach sorted rows
+    rows.forEach(row => tbody.appendChild(row));
+  }
+  
+  // Schedule Filtering
+  function filterSchedule() {
+    const labId = document.getElementById('labSelector').value;
+    const day = document.getElementById('daySelector').value;
+    const status = document.getElementById('statusSelector').value;
+    
+    const scheduleRows = document.querySelectorAll('.schedule-row');
+    scheduleRows.forEach(row => {
+      const itemLabId = row.getAttribute('data-lab-id');
+      const itemDay = row.getAttribute('data-day');
+      const itemStatus = row.getAttribute('data-status');
+      
+      const labMatch = labId === 'all' || itemLabId === labId;
+      const dayMatch = day === 'all' || itemDay === day;
+      const statusMatch = status === 'all' || itemStatus === status;
+      
+      if (labMatch && dayMatch && statusMatch) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+  
+  // Edit & Delete Functions
+  function editSchedule(scheduleId) {
+    // Redirect to edit page or show edit modal
+    window.location.href = "/edit_schedule/" + scheduleId;
+  }
+  
+  function deleteSchedule(scheduleId) {
+    if (confirm("Are you sure you want to delete this schedule?")) {
+      // Create a form to submit the delete request with CSRF protection
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = "/delete_schedule/" + scheduleId;
+      document.body.appendChild(form);
+      form.submit();
+    }
+  }
+  
+  function editLab(labId) {
+    window.location.href = "/edit_laboratory/" + labId;
+  }
+  
+  function deleteLab(labId) {
+    if (confirm("Are you sure you want to delete this laboratory? This will also delete all associated schedules.")) {
+      // Create a form to submit the delete request with CSRF protection
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = "/delete_laboratory/" + labId;
+      document.body.appendChild(form);
+      form.submit();
+    }
+  }
+  
+  // Randomly assign pastel colors to cells
+  document.addEventListener('DOMContentLoaded', function() {
+    const scheduleItems = document.querySelectorAll('.schedule-item');
+    const colorClasses = [
+      'random-color-1', 'random-color-2', 'random-color-3', 'random-color-4',
+      'random-color-5', 'random-color-6', 'random-color-7', 'random-color-8'
+    ];
+    
+    scheduleItems.forEach(item => {
+      if (item.classList.contains('status-available')) {
+        const randomColorClass = colorClasses[Math.floor(Math.random() * colorClasses.length)];
+        item.classList.add(randomColorClass);
+        item.classList.remove('status-available');
+      }
+    });
+  });
+</script>
+
+{% endblock %} 

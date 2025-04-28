@@ -1,0 +1,460 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Student</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('student_dashboard') }}">
+            <i class="fa fa-dashboard"></i> Dashboard
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_profile') }}">
+            <i class="fa fa-user"></i> Profile
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_remaining') }}">
+            <i class="fa fa-clock-o"></i> Remaining Sessions
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_sitin_history') }}">
+            <i class="fa fa-history"></i> Sit-in History
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_lab_resources') }}">
+            <i class="fa fa-book"></i> Lab Resources
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('lab_schedule') }}" class="active">
+            <i class="fa fa-calendar"></i> Lab Schedule
+          </a>
+        </li>
+        <li>
+          <a href="{{ url_for('student_reservation') }}">
+            <i class="fa fa-pencil-square-o"></i> Reservation
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Lab Schedule</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Schedule View -->
+    <div class="content-row">
+      <div class="schedule-card" style="width: 100%">
+        <h4>
+          <i class="fa fa-calendar" aria-hidden="true" style="margin-right: 5px"></i>
+          Weekly Lab Schedule
+        </h4>
+        <div class="filter-group">
+          <div class="filter-item">
+            <label for="labSelector">Laboratory:</label>
+            <select id="labSelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Laboratories</option>
+              {% for lab in labs %}
+              <option value="{{ lab.lab_id }}">{{ lab.building }} - Room {{ lab.room_number }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="daySelector">Day:</label>
+            <select id="daySelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Days</option>
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="statusSelector">Status:</label>
+            <select id="statusSelector" class="form-control" onchange="filterSchedule()">
+              <option value="all">All Statuses</option>
+              <option value="Available">Available</option>
+              <option value="Reserved">Reserved</option>
+              <option value="Unavailable">Unavailable</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Weekly Schedule View -->
+        <div class="timetable-container">
+          <table class="timetable">
+            <thead>
+              <tr>
+                <th style="width: 12%;">Time</th>
+                <th>Monday</th>
+                <th>Tuesday</th>
+                <th>Wednesday</th>
+                <th>Thursday</th>
+                <th>Friday</th>
+                <th>Saturday</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for time_slot in time_slots %}
+              <tr>
+                <td class="time-column">{{ time_slot }}</td>
+                {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] %}
+                <td class="schedule-cell" data-day="{{ day }}" data-time="{{ time_slot }}">
+                  {% for schedule in schedules %}
+                    {% if schedule.day == day and schedule.start_time <= time_slot and schedule.end_time > time_slot %}
+                    <div class="schedule-item" 
+                         data-lab-id="{{ schedule.lab_id }}" 
+                         data-status="{{ schedule.status }}"
+                         style="background-color: {% if schedule.status == 'Available' %}#4CAF50{% elif schedule.status == 'Reserved' %}#FFC107{% else %}#F44336{% endif %};">
+                      <div class="schedule-lab">{{ schedule.building }} - {{ schedule.room_number }}</div>
+                      <div class="schedule-time">{{ schedule.start_time }} - {{ schedule.end_time }}</div>
+                      <div class="schedule-status">{{ schedule.status }}</div>
+                      {% if schedule.status == 'Available' %}
+                      <a href="{{ url_for('student_reservation', lab_id=schedule.lab_id, day=day, time=time_slot) }}" class="reserve-btn">
+                        Reserve
+                      </a>
+                      {% endif %}
+                    </div>
+                    {% endif %}
+                  {% endfor %}
+                </td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        
+        {% if not schedules %}
+        <div style="text-align: center; padding: 30px; color: #666; background-color: #f9f9f9; border-radius: 8px; margin-top: 20px;">
+          <i class="fa fa-info-circle" style="font-size: 2em; color: #4caf50; margin-bottom: 15px"></i>
+          <p>No lab schedules are available at this time.</p>
+          <p style="font-size: 0.9em; color: #888; margin-top: 10px;">
+            Please check back later or contact your laboratory administrator.
+          </p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    
+    <!-- Available Laboratories -->
+    <div class="content-row" style="margin-top: 30px;">
+      <div class="lab-card">
+        <div class="card-header">
+          <h4>
+            <i class="fa fa-desktop" aria-hidden="true" style="margin-right: 5px"></i>
+            Available Laboratories
+          </h4>
+        </div>
+        
+        <div class="labs-container">
+          {% for lab in labs %}
+          <div class="lab-item" data-lab-id="{{ lab.lab_id }}">
+            <div class="lab-header">
+              <h5>{{ lab.building }} - Room {{ lab.room_number }}</h5>
+              <span class="lab-capacity">
+                <i class="fa fa-users" aria-hidden="true"></i> 
+                {{ lab.capacity }} students
+              </span>
+            </div>
+            <div class="lab-details">
+              {% if lab.equipment %}
+              <div class="lab-info">
+                <span class="label">Equipment:</span>
+                <span class="value">{{ lab.equipment }}</span>
+              </div>
+              {% endif %}
+              {% if lab.software %}
+              <div class="lab-info">
+                <span class="label">Software:</span>
+                <span class="value">{{ lab.software }}</span>
+              </div>
+              {% endif %}
+            </div>
+            <a href="{{ url_for('student_reservation', lab_id=lab.lab_id) }}" class="reserve-lab-btn">
+              <i class="fa fa-calendar-check-o"></i> Reserve
+            </a>
+          </div>
+          {% endfor %}
+          
+          {% if not labs %}
+          <div style="text-align: center; padding: 30px; color: #666; width: 100%;">
+            <i class="fa fa-info-circle" style="font-size: 2em; color: #4caf50; margin-bottom: 15px;"></i>
+            <p>No laboratories are available at this time.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .filter-item {
+    flex: 1;
+    min-width: 200px;
+  }
+  
+  .filter-item label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+    font-size: 14px;
+  }
+  
+  .timetable-container {
+    overflow-x: auto;
+    margin-bottom: 30px;
+  }
+  
+  .timetable {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .timetable th, .timetable td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+  }
+  
+  .timetable th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+  }
+  
+  .time-column {
+    background-color: #f8f9fa;
+    font-weight: bold;
+  }
+  
+  .schedule-cell {
+    position: relative;
+    height: 80px;
+    vertical-align: top;
+  }
+  
+  .schedule-item {
+    padding: 8px;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.85em;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .schedule-lab {
+    font-weight: bold;
+    margin-bottom: 3px;
+  }
+  
+  .schedule-time {
+    font-size: 0.9em;
+    margin-bottom: 3px;
+  }
+  
+  .schedule-status {
+    margin-bottom: 8px;
+  }
+  
+  .reserve-btn {
+    margin-top: auto;
+    background-color: rgba(255, 255, 255, 0.3);
+    border: none;
+    padding: 6px 0;
+    border-radius: 4px;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background-color 0.2s;
+  }
+  
+  .reserve-btn:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+  }
+  
+  /* Lab Card Styles */
+  .lab-card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+  
+  .card-header {
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .card-header h4 {
+    margin: 0;
+    color: #333;
+  }
+  
+  .labs-container {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 15px;
+    gap: 15px;
+  }
+  
+  .lab-item {
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 15px;
+    flex: 1;
+    min-width: 300px;
+    max-width: calc(33.333% - 15px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .lab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .lab-header h5 {
+    margin: 0;
+    color: #333;
+    font-size: 16px;
+  }
+  
+  .lab-capacity {
+    color: #666;
+    font-size: 14px;
+  }
+  
+  .lab-details {
+    flex: 1;
+    margin-bottom: 15px;
+  }
+  
+  .lab-info {
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  
+  .lab-info .label {
+    font-weight: bold;
+    color: #555;
+    display: inline-block;
+    min-width: 80px;
+  }
+  
+  .lab-info .value {
+    color: #666;
+  }
+  
+  .reserve-lab-btn {
+    display: block;
+    background-color: #4caf50;
+    color: white;
+    padding: 8px 0;
+    border-radius: 4px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
+    transition: background-color 0.2s;
+  }
+  
+  .reserve-lab-btn:hover {
+    background-color: #45a049;
+  }
+  
+  @media (max-width: 992px) {
+    .lab-item {
+      max-width: calc(50% - 15px);
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .lab-item {
+      max-width: 100%;
+    }
+  }
+</style>
+
+<script>
+  // Schedule Filtering
+  function filterSchedule() {
+    const labId = document.getElementById('labSelector').value;
+    const day = document.getElementById('daySelector').value;
+    const status = document.getElementById('statusSelector').value;
+    
+    // Filter schedule items
+    const scheduleItems = document.querySelectorAll('.schedule-item');
+    scheduleItems.forEach(item => {
+      const itemLabId = item.getAttribute('data-lab-id');
+      const itemDay = item.closest('.schedule-cell').getAttribute('data-day');
+      const itemStatus = item.getAttribute('data-status');
+      
+      const labMatch = labId === 'all' || itemLabId === labId;
+      const dayMatch = day === 'all' || itemDay === day;
+      const statusMatch = status === 'all' || itemStatus === status;
+      
+      if (labMatch && dayMatch && statusMatch) {
+        item.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+    
+    // Also filter lab items if lab filter is active
+    if (labId !== 'all') {
+      const labItems = document.querySelectorAll('.lab-item');
+      labItems.forEach(item => {
+        if (item.getAttribute('data-lab-id') === labId) {
+          item.style.display = 'flex';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    } else {
+      // Show all labs
+      const labItems = document.querySelectorAll('.lab-item');
+      labItems.forEach(item => {
+        item.style.display = 'flex';
+      });
+    }
+  }
+</script>
+
+{% endblock %}

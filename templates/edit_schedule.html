@@ -1,0 +1,193 @@
+{% extends 'base.html' %} {% block content %}
+
+<div class="dashboard-container">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>UC - Admin</h2>
+      <button class="sidebar-inner-toggle" title="Toggle Sidebar">
+        <i class="fa fa-bars"></i>
+      </button>
+    </div>
+    <div class="sidebar-menu">
+      <ul>
+        <li>
+          <a href="{{ url_for('admin_dashboard') }}"
+            ><i class="fa fa-dashboard"></i> Admin Dashboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_current_sit_in') }}"
+            ><i class="fa fa-users"></i> Current Sit-In</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_sit_in_records') }}"
+            ><i class="fa fa-list-alt"></i> View Sit-in Records</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_leaderboard') }}"
+            ><i class="fa fa-trophy"></i> Leaderboard</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_announcements') }}"
+            ><i class="fa fa-bullhorn"></i> Announcements</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_resources') }}"
+            ><i class="fa fa-desktop"></i> Lab Resources</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_lab_schedule') }}" class="active"
+            ><i class="fa fa-calendar"></i> Lab Schedule</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_reports') }}"
+            ><i class="fa fa-file-text"></i> Generate Reports</a
+          >
+        </li>
+        <li>
+          <a href="{{ url_for('admin_feedback') }}"
+            ><i class="fa fa-comments"></i> View Feedback</a
+          >
+        </li>
+        <li style="margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+          <a href="{{ url_for('admin_system_management') }}"
+            ><i class="fa fa-cogs"></i> System</a
+          >
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div class="header">
+      <h1>Edit Schedule</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a href="{{ url_for('admin_lab_schedule') }}" class="Btn" style="background-color: #4caf50;">
+          <div class="sign">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+          </div>
+          <div class="text">Back</div>
+        </a>
+        <a class="Btn" href="{{ url_for('logout') }}">
+          <div class="sign">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>
+          </div>
+          <div class="text">Logout</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Edit Schedule Form -->
+    <div class="content-row">
+      <div class="schedule-card" style="max-width: 600px; margin: 0 auto;">
+        <h4>
+          <i class="fa fa-edit" aria-hidden="true" style="margin-right: 5px"></i>
+          Edit Schedule Details
+        </h4>
+        <form action="{{ url_for('edit_schedule', schedule_id=schedule.schedule_id) }}" method="POST">
+          <div class="form-group">
+            <label for="lab_id">Laboratory:</label>
+            <select name="lab_id" id="lab_id" class="form-control" required>
+              <option value="">Select Laboratory</option>
+              {% for lab in labs %}
+              <option value="{{ lab.lab_id }}" {% if lab.lab_id == schedule.lab_id %}selected{% endif %}>
+                {{ lab.building }} - Room {{ lab.room_number }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="day">Day:</label>
+            <select name="day" id="day" class="form-control" required>
+              <option value="">Select Day</option>
+              <option value="Monday" {% if schedule.day == 'Monday' %}selected{% endif %}>Monday</option>
+              <option value="Tuesday" {% if schedule.day == 'Tuesday' %}selected{% endif %}>Tuesday</option>
+              <option value="Wednesday" {% if schedule.day == 'Wednesday' %}selected{% endif %}>Wednesday</option>
+              <option value="Thursday" {% if schedule.day == 'Thursday' %}selected{% endif %}>Thursday</option>
+              <option value="Friday" {% if schedule.day == 'Friday' %}selected{% endif %}>Friday</option>
+              <option value="Saturday" {% if schedule.day == 'Saturday' %}selected{% endif %}>Saturday</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="start_time">Start Time:</label>
+            <input type="time" name="start_time" id="start_time" class="form-control" value="{{ schedule.start_time }}" required>
+          </div>
+          <div class="form-group">
+            <label for="end_time">End Time:</label>
+            <input type="time" name="end_time" id="end_time" class="form-control" value="{{ schedule.end_time }}" required>
+          </div>
+          <div class="form-group">
+            <label for="status">Status:</label>
+            <select name="status" id="status" class="form-control" required>
+              <option value="Available" {% if schedule.status == 'Available' %}selected{% endif %}>Available</option>
+              <option value="Reserved" {% if schedule.status == 'Reserved' %}selected{% endif %}>Reserved</option>
+              <option value="Unavailable" {% if schedule.status == 'Unavailable' %}selected{% endif %}>Unavailable</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="reserved_for">Reserved For:</label>
+            <input type="text" name="reserved_for" id="reserved_for" class="form-control" value="{{ schedule.reserved_for }}" placeholder="e.g., BSIT Class, Faculty Meeting, etc.">
+          </div>
+          <div class="form-group" style="display: flex; gap: 10px; justify-content: center;">
+            <button type="submit" class="submit-btn">Save Changes</button>
+            <a href="{{ url_for('admin_lab_schedule') }}" class="cancel-btn">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+  
+  .submit-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  
+  .cancel-btn {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+    display: inline-block;
+  }
+  
+  .submit-btn:hover {
+    background-color: #45a049;
+  }
+  
+  .cancel-btn:hover {
+    background-color: #d32f2f;
+  }
+</style>
+
+{% endblock %} 

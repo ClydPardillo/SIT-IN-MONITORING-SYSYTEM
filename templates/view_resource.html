@@ -4,7 +4,7 @@
   <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-header">
-      <h2>UC - {{ 'Admin' if session.get('is_admin') else 'Student' }}</h2>
+      <h2>UC - Student</h2>
       <button class="sidebar-inner-toggle" title="Toggle Sidebar">
         <i class="fa fa-bars"></i>
       </button>
@@ -12,48 +12,6 @@
 
     <div class="sidebar-menu">
       <ul>
-        {% if session.get('is_admin') %}
-        <li>
-          <a href="{{ url_for('admin_dashboard') }}"
-            ><i class="fa fa-dashboard"></i> Admin Dashboard</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_current_sit_in') }}"
-            ><i class="fa fa-users"></i> Current Sit-In</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_sit_in_records') }}"
-            ><i class="fa fa-list-alt"></i> View Sit-in Records</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_leaderboard') }}"
-            ><i class="fa fa-trophy"></i> Leaderboard</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_announcements') }}"
-            ><i class="fa fa-bullhorn"></i> Announcements</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_lab_resources') }}" class="active"
-            ><i class="fa fa-book"></i> Lab Resources</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_reports') }}"
-            ><i class="fa fa-file-text"></i> Generate Reports</a
-          >
-        </li>
-        <li>
-          <a href="{{ url_for('admin_feedback') }}"
-            ><i class="fa fa-comments"></i> View Feedback</a
-          >
-        </li>
-        {% else %}
         <li>
           <a href="{{ url_for('dashboard') }}"
             ><i class="fa fa-dashboard"></i> Dashboard</a
@@ -80,11 +38,15 @@
           >
         </li>
         <li>
+          <a href="{{ url_for('student_lab_schedule') }}"
+            ><i class="fa fa-calendar-check-o"></i> Lab Schedule</a
+          >
+        </li>
+        <li>
           <a href="{{ url_for('reservation') }}"
             ><i class="fa fa-calendar"></i> Reservation</a
           >
         </li>
-        {% endif %}
       </ul>
     </div>
   </div>
