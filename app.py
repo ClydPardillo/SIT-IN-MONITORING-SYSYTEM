@@ -605,17 +605,43 @@ def reservation():
                     (lr.status = 'Approved' AND lr.reservation_date >= date('now')))
                 ORDER BY lr.reservation_date ASC, lr.start_time ASC
         """, (session['user'],)).fetchall()
-        
+
+        # Get student info
+        student = conn.execute("SELECT * FROM students WHERE idno = ?", (session['user'],)).fetchone()
+        # Calculate remaining sessions (reuse dashboard logic)
+        if student['course'] in ("BSIT", "BSCS"):
+            max_sessions = 30
+        else:
+            max_sessions = 15
+        used_sessions = conn.execute("""
+            SELECT COUNT(*) as c 
+            FROM lab_sessions 
+            WHERE student_id = ? AND status = 'Completed'
+        """, (session['user'],)).fetchone()['c']
+        remaining_sessions = max_sessions - used_sessions
+        if remaining_sessions < 0:
+            remaining_sessions = 0
+        behavior_points = conn.execute("""
+            SELECT COALESCE(SUM(behavior_points), 0) as total
+            FROM lab_sessions
+            WHERE student_id = ? AND behavior_points > 0
+        """, (session['user'],)).fetchone()['total']
+        free_sessions = behavior_points // 3
+        if free_sessions > 0:
+            remaining_sessions += free_sessions
     except sqlite3.Error as e:
         flash(f"Database error: {str(e)}", "danger")
         labs = []
         reservations = []
-    
+        student = None
+        remaining_sessions = 0
     conn.close()
     return render_template('reservation.html', 
                          labs=labs, 
                          reservations=reservations,
-                         now=datetime.now().strftime('%Y-%m-%d'))
+                         now=datetime.now().strftime('%Y-%m-%d'),
+                         student=student,
+                         remaining_sessions=remaining_sessions)
 
 @app.route('/admin')
 def admin_dashboard():
@@ -640,7 +666,7 @@ def admin_dashboard():
         
         # Fetch all students with their details
         students_basic = conn.execute("""
-            SELECT idno, lastname, firstname, midname, course, year_level, email_address 
+            SELECT idno, lastname, firstname, midname, course, year_level, email_address, free_sessions_used 
             FROM students 
             ORDER BY lastname, firstname
         """).fetchall()
@@ -651,11 +677,11 @@ def admin_dashboard():
             # Create a mutable dictionary from the row
             student_dict = dict(student)
             
-            # Get used sessions count
+            # Get used sessions count (Completed + Active)
             used_sessions = conn.execute("""
                 SELECT COUNT(*) as count 
                 FROM lab_sessions 
-                WHERE student_id = ? AND status = 'Completed'
+                WHERE student_id = ? AND (status = 'Completed' OR status = 'Active')
             """, (student['idno'],)).fetchone()['count']
             student_dict['used_sessions'] = used_sessions
             
@@ -666,7 +692,20 @@ def admin_dashboard():
                 WHERE student_id = ? AND behavior_points > 0
             """, (student['idno'],)).fetchone()['total_points']
             student_dict['behavior_points'] = behavior_points
-            
+
+            # Calculate remaining sessions using new logic
+            max_sessions = 30 if student['course'] in ("BSIT", "BSCS") else 15
+            free_sessions_earned = behavior_points // 3
+            free_sessions_used = student['free_sessions_used'] if student['free_sessions_used'] is not None else 0
+            free_sessions_available = free_sessions_earned - free_sessions_used
+            if free_sessions_available < 0:
+                free_sessions_available = 0
+            base_remaining = max_sessions - used_sessions
+            if base_remaining < 0:
+                base_remaining = 0
+            total_remaining = base_remaining + free_sessions_available
+            student_dict['free_sessions_available'] = free_sessions_available
+            student_dict['remaining_sessions'] = total_remaining
             students.append(student_dict)
         
         # Fetch all available laboratories
@@ -818,26 +857,39 @@ def get_student_sessions(student_id):
     
     conn = get_db_connection()
     try:
-        # Get student's course
-        student = conn.execute("SELECT course FROM students WHERE idno = ?", (student_id,)).fetchone()
+        # Get student's course and free_sessions_used
+        student = conn.execute("SELECT course, free_sessions_used FROM students WHERE idno = ?", (student_id,)).fetchone()
         if not student:
             return jsonify({'error': 'Student not found'}), 404
 
-        # Calculate max sessions based on course
         max_sessions = 30 if student['course'] in ("BSIT", "BSCS") else 15
+        free_sessions_used = student['free_sessions_used'] if student['free_sessions_used'] is not None else 0
 
-        # Count used sessions
+        # Count used sessions (Completed + Active)
         used_sessions = conn.execute("""
             SELECT COUNT(*) as count 
             FROM lab_sessions 
-            WHERE student_id = ? AND status = 'Completed'
+            WHERE student_id = ? AND (status = 'Completed' OR status = 'Active')
         """, (student_id,)).fetchone()['count']
 
-        # Calculate remaining sessions
-        remaining_sessions = max(0, max_sessions - used_sessions)
+        # Calculate behavior points and free sessions
+        behavior_points = conn.execute("""
+            SELECT COALESCE(SUM(behavior_points), 0) as total
+            FROM lab_sessions
+            WHERE student_id = ? AND behavior_points > 0
+        """, (student_id,)).fetchone()['total']
+        free_sessions_earned = behavior_points // 3
+        free_sessions_available = free_sessions_earned - free_sessions_used
+        if free_sessions_available < 0:
+            free_sessions_available = 0
+
+        base_remaining = max_sessions - used_sessions
+        if base_remaining < 0:
+            base_remaining = 0
+        total_remaining = base_remaining + free_sessions_available
 
         return jsonify({
-            'remaining_sessions': remaining_sessions
+            'remaining_sessions': total_remaining
         })
 
     except sqlite3.Error as e:
@@ -872,20 +924,45 @@ def start_session():
                 'message': 'Student already has an active session'
             }), 400
 
-        # Check if student has remaining sessions
-        student = conn.execute("SELECT course FROM students WHERE idno = ?", (student_id,)).fetchone()
+        # Get student info
+        student = conn.execute("SELECT course, free_sessions_used FROM students WHERE idno = ?", (student_id,)).fetchone()
         max_sessions = 30 if student['course'] in ("BSIT", "BSCS") else 15
+        free_sessions_used = student['free_sessions_used'] if student['free_sessions_used'] is not None else 0
+
+        # Count used sessions (Completed + Active)
         used_sessions = conn.execute("""
             SELECT COUNT(*) as count 
             FROM lab_sessions 
-            WHERE student_id = ? AND status = 'Completed'
+            WHERE student_id = ? AND (status = 'Completed' OR status = 'Active')
         """, (student_id,)).fetchone()['count']
 
-        if used_sessions >= max_sessions:
+        # Calculate behavior points and free sessions
+        behavior_points = conn.execute("""
+            SELECT COALESCE(SUM(behavior_points), 0) as total
+            FROM lab_sessions
+            WHERE student_id = ? AND behavior_points > 0
+        """, (student_id,)).fetchone()['total']
+        free_sessions_earned = behavior_points // 3
+        free_sessions_available = free_sessions_earned - free_sessions_used
+        if free_sessions_available < 0:
+            free_sessions_available = 0
+
+        base_remaining = max_sessions - used_sessions
+        if base_remaining < 0:
+            base_remaining = 0
+        total_remaining = base_remaining + free_sessions_available
+
+        if total_remaining <= 0:
             return jsonify({
                 'success': False,
                 'message': 'No remaining sessions available'
             }), 400
+
+        # If no base sessions left, use a free session
+        if base_remaining == 0 and free_sessions_available > 0:
+            conn.execute("""
+                UPDATE students SET free_sessions_used = free_sessions_used + 1 WHERE idno = ?
+            """, (student_id,))
 
         # Get current time in Philippines timezone
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -4421,6 +4498,35 @@ def download_schedule_template():
     response.headers["content-type"] = "text/csv"
     
     return response
+
+@app.route('/admin/reservations')
+def admin_reservations():
+    if 'user' not in session or not session.get('is_admin'):
+        flash("Access denied. Admin privileges required.", "danger")
+        return redirect(url_for('home'))
+    try:
+        conn = get_db_connection()
+        # Fetch all reservations with student and lab details
+        reservations = conn.execute('''
+            SELECT lr.reservation_id, lr.student_id, s.lastname, s.firstname, s.midname, s.course, s.year_level,
+                   lr.lab_id, l.building, l.room_number, lr.reservation_date, lr.start_time, lr.end_time,
+                   lr.purpose, lr.status, lr.created_at, lr.approved_by, lr.approval_date, lr.rejection_reason
+            FROM lab_reservations lr
+            JOIN students s ON lr.student_id = s.idno
+            JOIN laboratories l ON lr.lab_id = l.lab_id
+            ORDER BY lr.reservation_date DESC, lr.start_time DESC
+        ''').fetchall()
+        # Fetch all labs with capacity
+        labs = conn.execute('''
+            SELECT lab_id, building, room_number, capacity
+            FROM laboratories
+            ORDER BY building, room_number
+        ''').fetchall()
+        conn.close()
+        return render_template('admin_reservations.html', reservations=reservations, labs=labs)
+    except sqlite3.Error as e:
+        flash(f"Database error: {str(e)}", "danger")
+        return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
     app.run(debug=True)

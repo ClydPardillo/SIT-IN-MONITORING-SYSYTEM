@@ -21,7 +21,8 @@ CREATE TABLE students (
     course TEXT NOT NULL,
     year_level INTEGER,
     email_address TEXT UNIQUE NOT NULL,
-    image_path TEXT
+    image_path TEXT,
+    free_sessions_used INTEGER DEFAULT 0
 );
 
 -- Laboratories table (information about lab rooms)

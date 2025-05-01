@@ -75,17 +75,83 @@
         </h4>
         <form action="{{ url_for('reservation') }}" method="POST">
           <div class="form-group" style="margin-bottom: 20px">
+            <label for="idno">ID Number:</label>
+            <input
+              type="text"
+              id="idno"
+              name="idno"
+              class="form-control"
+              value="{{ student.idno }}"
+              readonly
+            />
+          </div>
+          <div class="form-group" style="margin-bottom: 20px">
+            <label for="student_name">Student Name:</label>
+            <input
+              type="text"
+              id="student_name"
+              name="student_name"
+              class="form-control"
+              value="{{ student.lastname }}, {{ student.firstname }}{% if student.midname %} {{ student.midname }}{% endif %}"
+              readonly
+            />
+          </div>
+          <div class="form-group" style="margin-bottom: 20px">
+            <label for="purpose">Purpose:</label>
+            <select
+              id="purpose"
+              name="purpose"
+              class="form-control"
+              required
+            >
+              <option value="" disabled selected>Select a purpose</option>
+              <option value="C Programming">C Programming</option>
+              <option value="Java Programming">Java Programming</option>
+              <option value="Python Programming">Python Programming</option>
+              <option value="C# Programming">C# Programming</option>
+              <option value="Database">Database</option>
+              <option value="Digital Logic & Design">Digital Logic & Design</option>
+              <option value="Embedded Systems & IOT">Embedded Systems & IOT</option>
+              <option value="System Integration & Architecture">System Integration & Architecture</option>
+              <option value="Computer Application">Computer Application</option>
+              <option value="Project Management">Project Management</option>
+              <option value="IT Trends">IT Trends</option>
+              <option value="Technopreneurship">Technopreneurship</option>
+              <option value="Capstone">Capstone</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 20px">
             <label for="lab_id">Select Laboratory:</label>
-            <select id="lab_id" name="lab_id" class="form-control" required>
+            <select
+              id="lab_id"
+              name="lab_id"
+              class="form-control"
+              required
+            >
               <option value="" disabled selected>Choose a laboratory</option>
               {% for lab in labs %}
-              <option value="{{ lab.lab_id }}">
+              <option value="{{ lab.lab_id }}" data-capacity="{{ lab.capacity }}">
                 {{ lab.building }} - Room {{ lab.room_number }}
               </option>
               {% endfor %}
             </select>
           </div>
-
+          <div class="form-group" style="margin-bottom: 20px" id="pcNumberGroup" style="display:none;">
+            <label for="computer_number">Computer Number:</label>
+            <select id="computer_number" name="computer_number" class="form-control" required>
+              <option value="" disabled selected>Select a PC</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 20px">
+            <label for="start_time">Time-in:</label>
+            <input
+              type="time"
+              id="start_time"
+              name="start_time"
+              class="form-control"
+              required
+            />
+          </div>
           <div class="form-group" style="margin-bottom: 20px">
             <label for="reservation_date">Date:</label>
             <input
@@ -97,29 +163,17 @@
               required
             />
           </div>
-
           <div class="form-group" style="margin-bottom: 20px">
-            <label for="start_time">Start Time:</label>
+            <label for="remaining_sessions">Remaining Sessions:</label>
             <input
-              type="time"
-              id="start_time"
-              name="start_time"
+              type="text"
+              id="remaining_sessions"
+              name="remaining_sessions"
               class="form-control"
-              required
+              value="{{ remaining_sessions }}"
+              readonly
             />
           </div>
-
-          <div class="form-group" style="margin-bottom: 20px">
-            <label for="end_time">End Time:</label>
-            <input
-              type="time"
-              id="end_time"
-              name="end_time"
-              class="form-control"
-              required
-            />
-          </div>
-
           <div style="text-align: center">
             <button
               type="submit"
@@ -134,7 +188,7 @@
                 transition: all 0.3s ease;
               "
             >
-              Submit Reservation
+              Reserve
             </button>
           </div>
         </form>
@@ -259,5 +313,29 @@
     </div>
   </div>
 </div>
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const labSelect = document.getElementById('lab_id');
+    const pcNumberGroup = document.getElementById('pcNumberGroup');
+    const pcNumberSelect = document.getElementById('computer_number');
+    labSelect.addEventListener('change', function() {
+      const selectedOption = labSelect.options[labSelect.selectedIndex];
+      const capacity = parseInt(selectedOption.getAttribute('data-capacity'));
+      if (!isNaN(capacity) && capacity > 0) {
+        pcNumberSelect.innerHTML = '<option value="" disabled selected>Select a PC</option>';
+        for (let i = 1; i <= capacity; i++) {
+          pcNumberSelect.innerHTML += `<option value="${i}">PC ${i}</option>`;
+        }
+        pcNumberGroup.style.display = '';
+      } else {
+        pcNumberSelect.innerHTML = '<option value="" disabled selected>Select a PC</option>';
+        pcNumberGroup.style.display = 'none';
+      }
+    });
+  });
+</script>
+{% endblock %}
 
 {% endblock %}
