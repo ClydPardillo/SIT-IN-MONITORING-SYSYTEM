@@ -3914,7 +3914,7 @@ def student_lab_schedule():
     cursor.close()
     conn.close()
     
-    return render_template('student_lab_schedule.html', labs=labs, schedules=schedules, time_slots=time_slots)
+    return render_template('student_lab_schedule.html', labs=labs, schedules=schedules, time_slots=time_slots, default_lab_id=517)
 
 @app.route('/reserve-schedule', methods=['POST'])
 def reserve_schedule():
@@ -4006,7 +4006,7 @@ def admin_lab_schedule():
     cursor.close()
     conn.close()
     
-    return render_template('admin_lab_schedule.html', labs=labs, schedules=schedules, time_slots=time_slots)
+    return render_template('admin_lab_schedule.html', labs=labs, schedules=schedules, time_slots=time_slots, default_lab_id=517)
 
 @app.route('/add_schedule', methods=['POST'])
 def add_schedule():
