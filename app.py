@@ -47,11 +47,92 @@ create_admin_logs_table()
 
 @app.after_request
 def add_header(response):
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
+    """Add headers to both force latest IE rendering engine or Chrome Frame,
+    and also to cache the rendered page for 10 minutes."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return response
 
+def initialize_lab_computers():
+    """Ensure all lab computers exist in the lab_computers table"""
+    try:
+        conn = get_db_connection()
+        
+        # First, check if the lab_computers table exists
+        table_exists = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='lab_computers'
+        """).fetchone()
+        
+        # If table doesn't exist, create it
+        if not table_exists:
+            conn.execute("""
+                CREATE TABLE lab_computers (
+                    id INTEGER PRIMARY KEY,
+                    lab_id INTEGER NOT NULL,
+                    pc_number INTEGER NOT NULL,
+                    status TEXT DEFAULT 'Available',
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+                    UNIQUE(lab_id, pc_number)
+                )
+            """)
+        
+        # Get all labs and their capacities
+        labs = conn.execute("SELECT lab_id, capacity FROM laboratories").fetchall()
+        
+        # Initialize PCs for each lab
+        for lab in labs:
+            lab_id = lab['lab_id']
+            capacity = lab['capacity']
+            
+            # Check existing PCs for this lab
+            existing_pcs = conn.execute("""
+                SELECT pc_number FROM lab_computers
+                WHERE lab_id = ?
+            """, (lab_id,)).fetchall()
+            
+            existing_pc_numbers = [pc['pc_number'] for pc in existing_pcs]
+            
+            # Create missing PCs
+            for i in range(1, capacity + 1):
+                if i not in existing_pc_numbers:
+                    conn.execute("""
+                        INSERT INTO lab_computers (lab_id, pc_number, status, last_updated)
+                        VALUES (?, ?, 'Available', CURRENT_TIMESTAMP)
+                    """, (lab_id, i))
+        
+        # Update PC status based on active sessions
+        active_sessions = conn.execute("""
+            SELECT ls.session_id, ls.lab_id, r.computer_number
+            FROM lab_sessions ls
+            LEFT JOIN lab_reservations r ON ls.reservation_id = r.reservation_id
+            WHERE ls.status = 'Active' AND r.computer_number IS NOT NULL
+        """).fetchall()
+        
+        for session in active_sessions:
+            lab_id = session['lab_id']
+            pc_number = session['computer_number']
+            
+            # Update PC status to Used
+            conn.execute("""
+                UPDATE lab_computers
+                SET status = 'Used',
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE lab_id = ? AND pc_number = ?
+            """, (lab_id, pc_number))
+        
+        conn.commit()
+        conn.close()
+        print("Lab computers initialized successfully")
+        
+    except sqlite3.Error as e:
+        print(f"Database error initializing lab computers: {e}")
+    
+# Initialize lab computers when app starts
+with app.app_context():
+    initialize_lab_computers()
 
 def format_time(value):
     try:
@@ -542,6 +623,7 @@ def reservation():
         reservation_date = request.form.get('reservation_date')
         start_time = request.form.get('start_time')
         end_time = request.form.get('end_time')
+        purpose = request.form.get('purpose')
         student_id = session['user']
         
         try:
@@ -572,14 +654,14 @@ def reservation():
             
             # Create the reservation
             conn.execute("""
-                    INSERT INTO lab_reservations (student_id, lab_id, reservation_date, start_time, end_time, status)
-                    VALUES (?, ?, ?, ?, ?, 'Pending')
-                """, (student_id, lab_id, reservation_date, start_time, end_time))
+                    INSERT INTO lab_reservations (student_id, lab_id, reservation_date, start_time, end_time, purpose, status)
+                    VALUES (?, ?, ?, ?, ?, ?, 'Pending')
+                """, (student_id, lab_id, reservation_date, start_time, end_time, purpose))
             conn.commit()
             flash("Reservation submitted successfully!", "success")
                 
-        except ValueError:
-            flash("Invalid time format.", "danger")
+        except ValueError as e:
+            flash(f"Invalid time format: {str(e)}", "danger")
         except sqlite3.Error as e:
             flash(f"Database error: {str(e)}", "danger")
         
@@ -596,12 +678,16 @@ def reservation():
                     CASE 
                         WHEN lr.status = 'Approved' THEN 'badge-success'
                         WHEN lr.status = 'Pending' THEN 'badge-warning'
-                        ELSE 'badge-danger'
-                    END as status_badge
+                        WHEN lr.status = 'Rejected' THEN 'badge-danger'
+                        ELSE 'badge-info'
+                    END as status_badge,
+                    lr.rejection_reason,
+                    lr.computer_number
                 FROM lab_reservations lr
                 JOIN laboratories l ON lr.lab_id = l.lab_id
                 WHERE lr.student_id = ? 
                 AND (lr.status = 'Pending' OR 
+                     lr.status = 'Rejected' OR
                     (lr.status = 'Approved' AND lr.reservation_date >= date('now')))
                 ORDER BY lr.reservation_date ASC, lr.start_time ASC
         """, (session['user'],)).fetchall()
@@ -1035,14 +1121,48 @@ def logout_session(student_id):
         # Get current time in Philippines timezone
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
+        # Get the lab session details before updating it
+        session_details = conn.execute("""
+            SELECT ls.lab_id, r.computer_number
+            FROM lab_sessions ls
+            LEFT JOIN lab_reservations r ON ls.reservation_id = r.reservation_id
+            WHERE ls.student_id = ? AND ls.status = 'Active'
+        """, (student_id,)).fetchone()
+        
+        # Update the session to completed
         conn.execute("""
             UPDATE lab_sessions 
             SET status = 'Completed',
                 check_out_time = ?
             WHERE student_id = ? AND status = 'Active'
         """, (current_time, student_id))
+        
+        # If this session has an associated PC, update its status to Available
+        if session_details and session_details['computer_number']:
+            lab_id = session_details['lab_id']
+            pc_number = session_details['computer_number']
+            
+            # Update the PC status to Available
+            conn.execute("""
+                UPDATE lab_computers
+                SET status = 'Available',
+                    last_updated = ?
+                WHERE lab_id = ? AND pc_number = ?
+            """, (current_time, lab_id, pc_number))
+            
+            # Log that the PC was freed
+            lab_info = conn.execute("""
+                SELECT building, room_number FROM laboratories WHERE lab_id = ?
+            """, (lab_id,)).fetchone()
+            
+            if lab_info:
+                location = f"{lab_info['building']} - Room {lab_info['room_number']}"
+                conn.execute("""
+                    INSERT INTO admin_logs (admin_id, action, timestamp)
+                    VALUES (?, ?, datetime('now'))
+                """, (session['user'], f"PC #{pc_number} in {location} freed after student {student_id} was logged out"))
+        
         conn.commit()
-        flash("Student logged out successfully!", "success")
     except sqlite3.Error as e:
         flash(f"Error logging out student: {str(e)}", "danger")
     finally:
@@ -4506,16 +4626,33 @@ def admin_reservations():
         return redirect(url_for('home'))
     try:
         conn = get_db_connection()
-        # Fetch all reservations with student and lab details
+        # Fetch only pending reservations with student and lab details
         reservations = conn.execute('''
             SELECT lr.reservation_id, lr.student_id, s.lastname, s.firstname, s.midname, s.course, s.year_level,
                    lr.lab_id, l.building, l.room_number, lr.reservation_date, lr.start_time, lr.end_time,
-                   lr.purpose, lr.status, lr.created_at, lr.approved_by, lr.approval_date, lr.rejection_reason
+                   lr.purpose, lr.status, lr.created_at, lr.approved_by, lr.approval_date, lr.rejection_reason,
+                   lr.computer_number
             FROM lab_reservations lr
             JOIN students s ON lr.student_id = s.idno
             JOIN laboratories l ON lr.lab_id = l.lab_id
+            WHERE lr.status = 'Pending'
             ORDER BY lr.reservation_date DESC, lr.start_time DESC
         ''').fetchall()
+        
+        # Fetch processed reservations (approved/rejected) for logs
+        processed_reservations = conn.execute('''
+            SELECT lr.reservation_id, lr.student_id, s.lastname, s.firstname, s.midname,
+                   lr.lab_id, l.building, l.room_number, lr.reservation_date, lr.start_time, lr.end_time,
+                   lr.purpose, lr.status, lr.created_at, lr.approved_by, lr.approval_date, lr.rejection_reason,
+                   lr.computer_number
+            FROM lab_reservations lr
+            JOIN students s ON lr.student_id = s.idno
+            JOIN laboratories l ON lr.lab_id = l.lab_id
+            WHERE lr.status IN ('Approved', 'Rejected')
+            ORDER BY lr.approval_date DESC
+            LIMIT 20
+        ''').fetchall()
+        
         # Fetch all labs with capacity
         labs = conn.execute('''
             SELECT lab_id, building, room_number, capacity
@@ -4523,10 +4660,421 @@ def admin_reservations():
             ORDER BY building, room_number
         ''').fetchall()
         conn.close()
-        return render_template('admin_reservations.html', reservations=reservations, labs=labs)
+        return render_template('admin_reservations.html', reservations=reservations, processed_reservations=processed_reservations, labs=labs)
     except sqlite3.Error as e:
         flash(f"Database error: {str(e)}", "danger")
         return redirect(url_for('admin_dashboard'))
+
+@app.route('/api/get_lab_pc_status/<int:lab_id>')
+def get_lab_pc_status(lab_id):
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({"error": "Access denied"}), 403
+    
+    try:
+        conn = get_db_connection()
+        
+        # Check if lab exists
+        lab = conn.execute("SELECT * FROM laboratories WHERE lab_id = ?", (lab_id,)).fetchone()
+        if not lab:
+            conn.close()
+            return jsonify({"error": "Laboratory not found"}), 404
+        
+        # Get PCs for this lab
+        pc_status = []
+        
+        # First, check if we have PCs stored in the database
+        lab_pcs = conn.execute("""
+            SELECT id, pc_number, status 
+            FROM lab_computers 
+            WHERE lab_id = ? 
+            ORDER BY pc_number
+        """, (lab_id,)).fetchall()
+        
+        # If no PCs found, create default status based on lab capacity
+        if not lab_pcs:
+            for i in range(1, lab['capacity'] + 1):
+                pc_status.append({
+                    "pc_number": i,
+                    "status": "Available"
+                })
+        else:
+            for pc in lab_pcs:
+                pc_status.append({
+                    "id": pc['id'],
+                    "pc_number": pc['pc_number'],
+                    "status": pc['status']
+                })
+        
+        conn.close()
+        return jsonify({"lab_id": lab_id, "capacity": lab['capacity'], "pc_status": pc_status})
+    
+    except sqlite3.Error as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+@app.route('/api/update_lab_pc_status', methods=['POST'])
+def update_lab_pc_status():
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({"error": "Access denied"}), 403
+    
+    try:
+        data = request.json
+        lab_id = data.get('lab_id')
+        pc_status = data.get('pc_status')
+        
+        if not lab_id or not pc_status:
+            return jsonify({"error": "Missing required data"}), 400
+        
+        conn = get_db_connection()
+        
+        # First, check if the lab_computers table exists
+        table_exists = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='lab_computers'
+        """).fetchone()
+        
+        # If table doesn't exist, create it
+        if not table_exists:
+            conn.execute("""
+                CREATE TABLE lab_computers (
+                    id INTEGER PRIMARY KEY,
+                    lab_id INTEGER NOT NULL,
+                    pc_number INTEGER NOT NULL,
+                    status TEXT DEFAULT 'Available',
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (lab_id) REFERENCES laboratories(lab_id),
+                    UNIQUE(lab_id, pc_number)
+                )
+            """)
+        
+        # Clear existing PC status for this lab and insert new ones
+        conn.execute("DELETE FROM lab_computers WHERE lab_id = ?", (lab_id,))
+        
+        for pc in pc_status:
+            conn.execute("""
+                INSERT INTO lab_computers (lab_id, pc_number, status, last_updated)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            """, (lab_id, pc["pc"], pc["status"]))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({"success": True, "message": "PC status updated successfully"})
+    
+    except sqlite3.Error as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+@app.route('/api/approve_reservation', methods=['POST'])
+def approve_reservation():
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({"error": "Access denied"}), 403
+    
+    data = request.json
+    reservation_id = data.get('reservation_id')
+    manual_pc_number = data.get('pc_number')  # Optional manual PC assignment
+
+    if not reservation_id:
+        return jsonify({"error": "Missing reservation ID"}), 400
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get reservation details
+        reservation = conn.execute('''
+            SELECT r.*, l.capacity
+            FROM lab_reservations r
+            JOIN laboratories l ON r.lab_id = l.lab_id
+            WHERE r.reservation_id = ?
+        ''', (reservation_id,)).fetchone()
+        
+        if not reservation:
+            conn.close()
+            return jsonify({"error": "Reservation not found"}), 404
+        
+        if reservation['status'] != 'Pending':
+            conn.close()
+            return jsonify({"error": "Only pending reservations can be approved"}), 400
+        
+        # Auto-assign a computer if not manually specified
+        pc_number = manual_pc_number
+        if not pc_number:
+            # Check available computers for this lab on reservation date and time
+            available_pcs = conn.execute('''
+                SELECT pc_number, status
+                FROM lab_computers
+                WHERE lab_id = ? AND status = 'Available'
+                ORDER BY pc_number
+            ''', (reservation['lab_id'],)).fetchall()
+            
+            # If there are no computers tracked yet, initialize them
+            if not available_pcs and reservation['capacity'] > 0:
+                # Create available computers for this lab if none exist
+                for i in range(1, reservation['capacity'] + 1):
+                    conn.execute('''
+                        INSERT INTO lab_computers (lab_id, pc_number, status)
+                        VALUES (?, ?, 'Available')
+                    ''', (reservation['lab_id'], i))
+                conn.commit()
+                
+                # Fetch the newly created computers
+                available_pcs = conn.execute('''
+                    SELECT pc_number, status
+                    FROM lab_computers
+                    WHERE lab_id = ? AND status = 'Available'
+                    ORDER BY pc_number
+                ''', (reservation['lab_id'],)).fetchall()
+            
+            # Check for existing reservations at the same time to avoid double-booking
+            existing_reservations = conn.execute('''
+                SELECT computer_number
+                FROM lab_reservations
+                WHERE lab_id = ? 
+                AND reservation_date = ? 
+                AND status = 'Approved'
+                AND computer_number IS NOT NULL
+                AND (
+                    (start_time <= ? AND end_time > ?) OR
+                    (start_time < ? AND end_time >= ?) OR
+                    (start_time >= ? AND end_time <= ?)
+                )
+            ''', (
+                reservation['lab_id'],
+                reservation['reservation_date'],
+                reservation['start_time'], reservation['start_time'],
+                reservation['end_time'], reservation['end_time'],
+                reservation['start_time'], reservation['end_time']
+            )).fetchall()
+            
+            # Get list of already booked computers
+            booked_computers = [r['computer_number'] for r in existing_reservations]
+            
+            # Find an available computer not already booked
+            assigned_pc = None
+            for pc in available_pcs:
+                if pc['pc_number'] not in booked_computers:
+                    assigned_pc = pc['pc_number']
+                    break
+            
+            if not assigned_pc and available_pcs:
+                # If all PCs are booked at this timeslot, just assign the first available
+                assigned_pc = available_pcs[0]['pc_number']
+            
+            pc_number = assigned_pc
+        
+        if not pc_number:
+            conn.close()
+            return jsonify({
+                "error": "No computers available for assignment. Please manually assign a computer."
+            }), 400
+        
+        # Update reservation status and assign PC
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn.execute('''
+            UPDATE lab_reservations
+            SET status = 'Approved',
+                computer_number = ?,
+                approved_by = ?,
+                approval_date = ?
+            WHERE reservation_id = ?
+        ''', (pc_number, session['user'], current_time, reservation_id))
+        
+        # Update the PC status to "Used" in the lab_computers table
+        # This ensures the PC shows as red in the Computer Control panel
+        pc_exists = conn.execute('''
+            SELECT COUNT(*) as count FROM lab_computers 
+            WHERE lab_id = ? AND pc_number = ?
+        ''', (reservation['lab_id'], pc_number)).fetchone()['count']
+        
+        if pc_exists > 0:
+            # Update existing PC record
+            conn.execute('''
+                UPDATE lab_computers
+                SET status = 'Used',
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE lab_id = ? AND pc_number = ?
+            ''', (reservation['lab_id'], pc_number))
+        else:
+            # Create a new PC record if it doesn't exist
+            conn.execute('''
+                INSERT INTO lab_computers (lab_id, pc_number, status, last_updated)
+                VALUES (?, ?, 'Used', CURRENT_TIMESTAMP)
+            ''', (reservation['lab_id'], pc_number))
+        
+        # Create an active lab session for the student
+        # This ensures the reservation appears in the Current Sit-In module
+        
+        # Use current time for check-in instead of reservation time
+        current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Create the lab session
+        conn.execute('''
+            INSERT INTO lab_sessions (
+                student_id, lab_id, reservation_id, check_in_time, 
+                status, notes, created_by
+            ) VALUES (?, ?, ?, ?, 'Active', ?, ?)
+        ''', (
+            reservation['student_id'], 
+            reservation['lab_id'], 
+            reservation_id, 
+            current_datetime,
+            reservation['purpose'],  # Just use the purpose directly without the "Reservation #" prefix
+            session['user']
+        ))
+        
+        conn.commit()
+        
+        # Get updated reservation for response
+        updated_reservation = conn.execute('''
+            SELECT r.*, s.firstname, s.lastname, l.building, l.room_number
+            FROM lab_reservations r
+            JOIN students s ON r.student_id = s.idno
+            JOIN laboratories l ON r.lab_id = l.lab_id
+            WHERE r.reservation_id = ?
+        ''', (reservation_id,)).fetchone()
+        
+        if updated_reservation:
+            reservation_data = dict(updated_reservation)
+            
+            # Add a log entry for the approval
+            log_message = f"Reservation #{reservation_id} for {reservation_data['firstname']} {reservation_data['lastname']} approved, PC #{pc_number} assigned"
+            conn.execute('''
+                INSERT INTO admin_logs (admin_id, action, timestamp)
+                VALUES (?, ?, datetime('now'))
+            ''', (session['user'], log_message))
+            conn.commit()
+        
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Reservation approved successfully",
+            "pc_number": pc_number,
+            "reservation": dict(updated_reservation) if updated_reservation else None
+        })
+        
+    except sqlite3.Error as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+@app.route('/api/reject_reservation', methods=['POST'])
+def reject_reservation():
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({"error": "Access denied"}), 403
+    
+    data = request.json
+    reservation_id = data.get('reservation_id')
+    rejection_reason = data.get('rejection_reason', 'No reason provided')
+
+    if not reservation_id:
+        return jsonify({"error": "Missing reservation ID"}), 400
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get reservation details
+        reservation = conn.execute('''
+            SELECT r.*, s.firstname, s.lastname
+            FROM lab_reservations r
+            JOIN students s ON r.student_id = s.idno
+            WHERE r.reservation_id = ?
+        ''', (reservation_id,)).fetchone()
+        
+        if not reservation:
+            conn.close()
+            return jsonify({"error": "Reservation not found"}), 404
+        
+        if reservation['status'] != 'Pending':
+            conn.close()
+            return jsonify({"error": "Only pending reservations can be rejected"}), 400
+        
+        # Update reservation status
+        conn.execute('''
+            UPDATE lab_reservations
+            SET status = 'Rejected',
+                rejection_reason = ?
+            WHERE reservation_id = ?
+        ''', (rejection_reason, reservation_id))
+        
+        # Add a log entry
+        log_message = f"Reservation #{reservation_id} for {reservation['firstname']} {reservation['lastname']} rejected: {rejection_reason}"
+        conn.execute('''
+            INSERT INTO admin_logs (admin_id, action, timestamp)
+            VALUES (?, ?, datetime('now'))
+        ''', (session['user'], log_message))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Reservation rejected successfully"
+        })
+        
+    except sqlite3.Error as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+@app.route('/api/get_booked_pcs')
+def get_booked_pcs():
+    """API endpoint to get PCs that are already booked for a specific time slot"""
+    if 'user' not in session or not session.get('is_admin'):
+        return jsonify({"error": "Access denied"}), 403
+    
+    lab_id = request.args.get('lab_id')
+    date = request.args.get('date')
+    start_time = request.args.get('start_time')
+    end_time = request.args.get('end_time')
+    
+    if not all([lab_id, date, start_time, end_time]):
+        return jsonify({"error": "Missing required parameters"}), 400
+    
+    try:
+        conn = get_db_connection()
+        
+        # Get booked PCs for this time slot
+        booked_pcs = conn.execute("""
+            SELECT computer_number 
+            FROM lab_reservations
+            WHERE lab_id = ? 
+            AND reservation_date = ? 
+            AND status = 'Approved'
+            AND computer_number IS NOT NULL
+            AND (
+                (start_time <= ? AND end_time > ?) OR
+                (start_time < ? AND end_time >= ?) OR
+                (start_time >= ? AND end_time <= ?)
+            )
+        """, (lab_id, date, start_time, start_time, end_time, end_time, start_time, end_time)).fetchall()
+        
+        # Extract PC numbers
+        booked_pc_numbers = [pc['computer_number'] for pc in booked_pcs]
+        
+        # Get computers marked as "Used" in the lab_computers table
+        used_pcs = conn.execute("""
+            SELECT pc_number 
+            FROM lab_computers 
+            WHERE lab_id = ? AND status = 'Used'
+        """, (lab_id,)).fetchall()
+        
+        # Combine both lists
+        used_pc_numbers = [pc['pc_number'] for pc in used_pcs]
+        all_unavailable = list(set(booked_pc_numbers + used_pc_numbers))
+        
+        conn.close()
+        
+        return jsonify({
+            "lab_id": lab_id,
+            "date": date,
+            "start_time": start_time,
+            "end_time": end_time,
+            "booked_pcs": all_unavailable
+        })
+        
+    except sqlite3.Error as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
