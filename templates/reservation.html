@@ -171,12 +171,6 @@
               {% endfor %}
             </select>
           </div>
-          <div class="form-group" style="margin-bottom: 20px" id="pcNumberGroup" style="display:none;">
-            <label for="computer_number">Computer Number:</label>
-            <select id="computer_number" name="computer_number" class="form-control" required>
-              <option value="" disabled selected>Select a PC</option>
-            </select>
-          </div>
           <div class="form-group" style="margin-bottom: 20px">
             <label for="reservation_date">Date:</label>
             <input
@@ -207,6 +201,12 @@
               class="form-control"
               required
             />
+          </div>
+          <div class="form-group" style="margin-bottom: 20px" id="pcNumberGroup">
+            <label for="computer_number">Computer Number:</label>
+            <select id="computer_number" name="computer_number" class="form-control" required>
+              <option value="" disabled selected>Select date and time first</option>
+            </select>
           </div>
           <div class="form-group" style="margin-bottom: 20px">
             <label for="remaining_sessions">Remaining Sessions:</label>
@@ -440,19 +440,91 @@
     const labSelect = document.getElementById('lab_id');
     const pcNumberGroup = document.getElementById('pcNumberGroup');
     const pcNumberSelect = document.getElementById('computer_number');
-    labSelect.addEventListener('change', function() {
-      const selectedOption = labSelect.options[labSelect.selectedIndex];
-      const capacity = parseInt(selectedOption.getAttribute('data-capacity'));
-      if (!isNaN(capacity) && capacity > 0) {
-        pcNumberSelect.innerHTML = '<option value="" disabled selected>Select a PC</option>';
-        for (let i = 1; i <= capacity; i++) {
-          pcNumberSelect.innerHTML += `<option value="${i}">PC ${i}</option>`;
-        }
-        pcNumberGroup.style.display = '';
-      } else {
-        pcNumberSelect.innerHTML = '<option value="" disabled selected>Select a PC</option>';
-        pcNumberGroup.style.display = 'none';
+    const dateInput = document.getElementById('reservation_date');
+    const startTimeInput = document.getElementById('start_time');
+    const endTimeInput = document.getElementById('end_time');
+    
+    // Function to load available PCs
+    function loadAvailablePCs() {
+      const labId = labSelect.value;
+      const date = dateInput.value;
+      const startTime = startTimeInput.value;
+      const endTime = endTimeInput.value;
+      
+      if (!labId) {
+        pcNumberSelect.innerHTML = '<option value="" disabled selected>Please select a laboratory first</option>';
+        return;
       }
+      
+      if (!date) {
+        pcNumberSelect.innerHTML = '<option value="" disabled selected>Please select a date first</option>';
+        return;
+      }
+      
+      if (!startTime || !endTime) {
+        pcNumberSelect.innerHTML = '<option value="" disabled selected>Please select time-in and time-out</option>';
+        return;
+      }
+      
+      // Show loading state
+      pcNumberSelect.innerHTML = '<option value="" disabled selected>Loading PC status...</option>';
+      
+      // Call API to get PC availability
+      fetch(`/api/get_available_pcs?lab_id=${labId}&date=${date}&start_time=${startTime}&end_time=${endTime}`)
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to get PC status');
+          return response.json();
+        })
+        .then(data => {
+          // Clear select options
+          pcNumberSelect.innerHTML = '<option value="" disabled selected>Select a PC</option>';
+          
+          // Count available PCs
+          let availableCount = 0;
+          
+          // Add options for each PC
+          data.pc_status.forEach(pc => {
+            const option = document.createElement('option');
+            option.value = pc.pc_number;
+            
+            if (pc.status === 'Used') {
+              option.textContent = `PC ${pc.pc_number} (In Use)`;
+              option.disabled = true;
+              option.style.color = '#999';
+            } else {
+              option.textContent = `PC ${pc.pc_number}`;
+              availableCount++;
+            }
+            
+            pcNumberSelect.appendChild(option);
+          });
+          
+          // Show message if all PCs are in use
+          if (availableCount === 0) {
+            pcNumberSelect.innerHTML = '<option value="" disabled selected>All PCs are currently in use for this time slot</option>';
+          }
+        })
+        .catch(error => {
+          console.error('Error loading PC status:', error);
+          pcNumberSelect.innerHTML = '<option value="" disabled selected>Error loading PC status</option>';
+        });
+    }
+    
+    // Event listeners to update PC options when inputs change
+    labSelect.addEventListener('change', function() {
+      loadAvailablePCs();
+    });
+    
+    dateInput.addEventListener('change', function() {
+      loadAvailablePCs();
+    });
+    
+    startTimeInput.addEventListener('change', function() {
+      loadAvailablePCs();
+    });
+    
+    endTimeInput.addEventListener('change', function() {
+      loadAvailablePCs();
     });
     
     // Rejection reason modal functionality
@@ -460,21 +532,21 @@
     const reasonText = document.getElementById('rejectionReasonText');
     const closeBtn = document.getElementById('closeRejectionModal');
     
-    // Add click event to all view reason buttons
-    document.querySelectorAll('.view-reason-btn').forEach(button => {
-      button.addEventListener('click', function() {
-        const reason = this.getAttribute('data-reason');
-        reasonText.textContent = reason || 'No reason provided.';
-        modal.style.display = 'block';
-      });
-    });
-    
-    // Close modal when clicking X
+    // Add modal close handler
     if (closeBtn) {
       closeBtn.addEventListener('click', function() {
         modal.style.display = 'none';
       });
     }
+    
+    // Show modal if there are rejection reasons to display
+    document.querySelectorAll('.view-reason-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        const reason = this.getAttribute('data-reason');
+        if (reasonText) reasonText.textContent = reason;
+        if (modal) modal.style.display = 'block';
+      });
+    });
     
     // Close modal when clicking outside
     window.addEventListener('click', function(event) {
@@ -487,3 +559,4 @@
 {% endblock %}
 
 {% endblock %}
+

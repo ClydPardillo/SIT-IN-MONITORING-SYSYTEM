@@ -176,6 +176,8 @@
       <ul style="margin-bottom: 15px;">
         <li>Reset session counts for BSIT/BSCS students to 30 sessions</li>
         <li>Reset session counts for all other courses to 15 sessions</li>
+        <li>Clear all pending and approved reservations</li>
+        <li>Remove all reservation history and records</li>
         <li>This action <strong>cannot be undone</strong></li>
       </ul>
       
@@ -256,6 +258,8 @@
           <li>Reset session counts for all students to their default values</li>
           <li>Remove all earned behavior points for all students</li>
           <li>Remove all free sessions earned from behavior points</li>
+          <li>Clear all pending and approved lab reservations</li>
+          <li>Remove all reservation history and records</li>
           <li>This action <strong>cannot be undone</strong></li>
         </ul>
       </div>
@@ -391,7 +395,7 @@
     var sessionsButton = document.getElementById('finalResetSessionsButton');
     if (sessionsButton) {
       sessionsButton.addEventListener('click', function() {
-        if (confirm("Are you ABSOLUTELY SURE you want to reset all student sessions?")) {
+        if (confirm("Are you ABSOLUTELY SURE you want to reset all student sessions? This will also clear all reservations and reservation history.")) {
           window.location.href = "{{ url_for('admin_reset_sessions') }}";
         }
       });
@@ -411,7 +415,7 @@
     var allDataButton = document.getElementById('finalResetAllButton');
     if (allDataButton) {
       allDataButton.addEventListener('click', function() {
-        if (confirm("Are you ABSOLUTELY SURE you want to reset ALL student data?")) {
+        if (confirm("Are you ABSOLUTELY SURE you want to reset ALL student data? This will clear sessions, behavior points, and all reservations.")) {
           window.location.href = "{{ url_for('admin_reset_all') }}";
         }
       });
@@ -508,7 +512,7 @@
             return;
           }
           
-          if (confirm("Are you sure you want to reset this student's sessions to the default value?")) {
+          if (confirm("Are you sure you want to reset this student's sessions to the default value? This will also clear all their reservations and reservation history.")) {
             // Show loading state
             this.disabled = true;
             this.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Processing...';

@@ -311,12 +311,15 @@
               <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">{{ r.start_time }} - {{ r.end_time }}</td>
               <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">{{ r.building }} - Room {{ r.room_number }}</td>
               <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;" class="pc-number-cell">
-                {% if r.computer_number %}
+                {% if r.computer_number and r.status != 'Pending' %}
                   {{ r.computer_number }}
                 {% else %}
                   {% if r.status == 'Pending' %}
-                  <select class="pc-select" style="width: 60px; border: 1px solid #ddd; border-radius: 4px; padding: 2px;" data-lab-id="{{ r.lab_id }}" data-reservation-date="{{ r.reservation_date }}" data-start-time="{{ r.start_time }}" data-end-time="{{ r.end_time }}">
+                  <select class="pc-select" style="width: 80px; border: 1px solid #ddd; border-radius: 4px; padding: 4px;" data-lab-id="{{ r.lab_id }}" data-reservation-date="{{ r.reservation_date }}" data-start-time="{{ r.start_time }}" data-end-time="{{ r.end_time }}" data-original-value="{{ r.computer_number }}">
                     <option value="">Auto</option>
+                    {% for i in range(1, 31) %}
+                    <option value="{{ i }}" {% if r.computer_number == i %}selected{% endif %}>{{ i }}{% if r.computer_number == i %} ✓{% endif %}</option>
+                    {% endfor %}
                   </select>
                   {% else %}
                   -
@@ -538,6 +541,10 @@
     
     // Function to fetch lab capacity and populate PC numbers
     function fetchLabCapacityAndAvailablePCs(labId, reservationDate, startTime, endTime, selectElement) {
+      // Get the original computer number if available
+      const originalValue = selectElement.getAttribute('data-original-value');
+      console.log('Original computer number:', originalValue);
+      
       // First fetch the lab capacity
       fetch(`/api/get_lab_pc_status/${labId}`)
         .then(response => {
@@ -547,13 +554,14 @@
         .then(data => {
           // We now have the lab capacity
           const capacity = data.capacity;
+          console.log('Lab capacity:', capacity);
           
           // Next, fetch any already booked PCs for this time slot
           fetch(`/api/get_booked_pcs?lab_id=${labId}&date=${reservationDate}&start_time=${startTime}&end_time=${endTime}`)
             .then(response => {
               if (!response.ok) {
                 // If endpoint doesn't exist yet, just populate all PCs
-                populatePCOptions(selectElement, capacity, []);
+                populatePCOptions(selectElement, capacity, [], originalValue);
                 return;
               }
               return response.json();
@@ -561,37 +569,66 @@
             .then(bookedData => {
               if (bookedData) {
                 const bookedPCs = bookedData.booked_pcs || [];
-                populatePCOptions(selectElement, capacity, bookedPCs);
+                console.log('Booked PCs:', bookedPCs);
+                populatePCOptions(selectElement, capacity, bookedPCs, originalValue);
               }
             })
             .catch(error => {
               // If there's an error fetching booked PCs, just show all PCs
               console.error('Error fetching booked PCs:', error);
-              populatePCOptions(selectElement, capacity, []);
+              populatePCOptions(selectElement, capacity, [], originalValue);
             });
         })
         .catch(error => {
           console.error('Error fetching lab capacity:', error);
           // Fallback to a reasonable number if we can't get the capacity
-          populatePCOptions(selectElement, 30, []);
+          populatePCOptions(selectElement, 30, [], originalValue);
         });
     }
     
     // Function to populate PC options
-    function populatePCOptions(selectElement, capacity, bookedPCs) {
-      // Keep the "Auto" option
-      selectElement.innerHTML = '<option value="">Auto</option>';
+    function populatePCOptions(selectElement, capacity, bookedPCs, originalValue) {
+      console.log('Populating PC options - Capacity:', capacity, 'Booked:', bookedPCs, 'Original:', originalValue);
       
-      // Add PC options
+      // Start with a fresh dropdown
+      selectElement.innerHTML = '';
+      
+      // Add option for automatic assignment
+      const autoOption = document.createElement('option');
+      autoOption.value = '';
+      autoOption.textContent = 'Auto';
+      selectElement.appendChild(autoOption);
+      
+      // Add all available PC options
       for (let i = 1; i <= capacity; i++) {
-        // Skip PCs that are already booked
+        // Skip already booked PCs
         if (bookedPCs.includes(i)) continue;
         
         const option = document.createElement('option');
         option.value = i;
         option.textContent = i;
+        
+        // Mark as selected if it matches the original value
+        if (originalValue && i.toString() === originalValue.toString()) {
+          option.selected = true;
+          option.textContent = i + " (Student's Choice)";
+        }
+        
         selectElement.appendChild(option);
       }
+      
+      // If original value is not in the list (might be booked by someone else),
+      // add it anyway as the student's choice
+      if (originalValue && !Array.from(selectElement.options).some(opt => opt.value === originalValue.toString())) {
+        const studentChoice = document.createElement('option');
+        studentChoice.value = originalValue;
+        studentChoice.textContent = originalValue + " (Student's Choice)";
+        studentChoice.selected = true;
+        // Insert after "Auto" option
+        selectElement.insertBefore(studentChoice, selectElement.options[1]);
+      }
+      
+      console.log('Dropdown populated with options:', selectElement.options.length);
     }
     
     // Add event listeners to approve buttons
@@ -601,6 +638,24 @@
         const reservationId = row.getAttribute('data-reservation-id');
         const pcSelect = row.querySelector('.pc-select');
         const pcNumber = pcSelect ? pcSelect.value : null;
+        
+        // Get student and reservation details for confirmation
+        const cells = row.querySelectorAll('td');
+        const studentId = cells[0].textContent.trim();
+        const date = cells[1].textContent.trim();
+        const time = cells[2].textContent.trim();
+        const lab = cells[3].textContent.trim();
+        const purpose = cells[5].textContent.trim();
+        
+        // Show confirmation dialog
+        const pcText = pcNumber ? `PC #${pcNumber}` : "auto-assigned PC";
+        const confirmMessage = `Are you sure you want to approve this reservation?\n\nStudent ID: ${studentId}\nDate: ${date}\nTime: ${time}\nLab: ${lab}\nComputer: ${pcText}\nPurpose: ${purpose}`;
+        
+        if (!confirm(confirmMessage)) {
+          return; // User cancelled
+        }
+        
+        console.log('Approving reservation with PC number:', pcNumber);
         
         // Show loading state
         this.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
@@ -715,6 +770,8 @@
     
     // Function to approve a reservation
     function approveReservation(reservationId, pcNumber, row) {
+      console.log('Making API call to approve reservation:', reservationId, 'PC number:', pcNumber);
+      
       fetch('/api/approve_reservation', {
         method: 'POST',
         headers: {
@@ -727,7 +784,7 @@
       })
       .then(response => {
         if (!response.ok) {
-          throw response;
+          throw new Error('Failed to approve reservation');
         }
         return response.json();
       })
@@ -771,11 +828,25 @@
         }
       })
       .catch(error => {
-        if (error.json) {
-          error.json().then(errData => {
+        console.error('Error approving reservation:', error);
+        
+        // Check if the row still exists in the DOM
+        if (!document.body.contains(row)) {
+          // Row was already removed, approval was likely successful despite the error
+          return;
+        }
+        
+        if (error.response && error.response.json) {
+          error.response.json().then(errData => {
             alert(`Error: ${errData.error || 'Failed to approve reservation'}`);
           });
         } else {
+          // Check row status cell - if it already shows approved, don't show error
+          const statusCell = row.querySelector('.status-cell');
+          if (statusCell && statusCell.textContent.includes('Approved')) {
+            return;
+          }
+          
           alert('Error: Failed to approve reservation');
         }
         
@@ -910,4 +981,4 @@
     }
   });
 </script>
-{% endblock %} 
+{% endblock %}

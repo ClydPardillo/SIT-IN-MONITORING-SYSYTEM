@@ -625,6 +625,7 @@ def reservation():
         end_time = request.form.get('end_time')
         purpose = request.form.get('purpose')
         student_id = session['user']
+        computer_number = request.form.get('computer_number')  # Get the computer number
         
         try:
             # Check if end time is after start time
@@ -654,9 +655,9 @@ def reservation():
             
             # Create the reservation
             conn.execute("""
-                    INSERT INTO lab_reservations (student_id, lab_id, reservation_date, start_time, end_time, purpose, status)
-                    VALUES (?, ?, ?, ?, ?, ?, 'Pending')
-                """, (student_id, lab_id, reservation_date, start_time, end_time, purpose))
+                    INSERT INTO lab_reservations (student_id, lab_id, reservation_date, start_time, end_time, purpose, status, computer_number)
+                    VALUES (?, ?, ?, ?, ?, ?, 'Pending', ?)
+                """, (student_id, lab_id, reservation_date, start_time, end_time, purpose, computer_number))
             conn.commit()
             flash("Reservation submitted successfully!", "success")
                 
@@ -3339,16 +3340,22 @@ def admin_reset_sessions():
         # Delete all completed lab sessions
         conn.execute("DELETE FROM lab_sessions WHERE status = 'Completed'")
         
+        # Clear all lab reservations
+        conn.execute("DELETE FROM lab_reservations")
+        
+        # Reset free_sessions_used for all students
+        conn.execute("UPDATE students SET free_sessions_used = 0")
+        
         # Log the action
         conn.execute("""
             INSERT INTO admin_logs (admin_id, action, timestamp)
-            VALUES (?, 'Reset all student sessions', datetime('now'))
+            VALUES (?, 'Reset all student sessions and cleared all reservations', datetime('now'))
         """, (session['user'],))
         
         conn.commit()
         conn.close()
         
-        flash("All student sessions have been reset to their default values.", "success")
+        flash("All student sessions have been reset and all reservations have been cleared.", "success")
     except sqlite3.Error as e:
         flash(f"Database error: {str(e)}", "danger")
     
@@ -3398,16 +3405,22 @@ def admin_reset_all():
         # Also reset behavior points for any active sessions
         conn.execute("UPDATE lab_sessions SET behavior_points = 0 WHERE behavior_points > 0")
         
+        # Clear all lab reservations
+        conn.execute("DELETE FROM lab_reservations")
+        
+        # Reset free_sessions_used for all students
+        conn.execute("UPDATE students SET free_sessions_used = 0")
+        
         # Log the action
         conn.execute("""
             INSERT INTO admin_logs (admin_id, action, timestamp)
-            VALUES (?, 'Reset all student data (sessions and points)', datetime('now'))
+            VALUES (?, 'Reset all student data (sessions, points, and reservations)', datetime('now'))
         """, (session['user'],))
         
         conn.commit()
         conn.close()
         
-        flash("All student data (sessions and behavior points) has been reset.", "success")
+        flash("All student data (sessions, behavior points, and reservations) has been reset.", "success")
     except sqlite3.Error as e:
         flash(f"Database error: {str(e)}", "danger")
     
@@ -3622,18 +3635,24 @@ def admin_reset_student_session():
         # Delete all completed lab sessions for this student
         conn.execute("DELETE FROM lab_sessions WHERE student_id = ? AND status = 'Completed'", (student_id,))
         
+        # Delete all reservations for this student
+        conn.execute("DELETE FROM lab_reservations WHERE student_id = ?", (student_id,))
+        
+        # Reset free_sessions_used for this student
+        conn.execute("UPDATE students SET free_sessions_used = 0 WHERE idno = ?", (student_id,))
+        
         # Log the action
         conn.execute("""
             INSERT INTO admin_logs (admin_id, action, timestamp)
             VALUES (?, ?, datetime('now'))
-        """, (session['user'], f'Reset sessions for student {student_id}'))
+        """, (session['user'], f'Reset sessions and cleared reservations for student {student_id}'))
         
         conn.commit()
         conn.close()
         
         return jsonify({
             'success': True,
-            'message': f"Sessions reset successfully for student {student_id}"
+            'message': f"Sessions reset and reservations cleared successfully for student {student_id}"
         })
         
     except sqlite3.Error as e:
@@ -5071,6 +5090,99 @@ def get_booked_pcs():
             "start_time": start_time,
             "end_time": end_time,
             "booked_pcs": all_unavailable
+        })
+        
+    except sqlite3.Error as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+@app.route('/api/get_available_pcs')
+def get_available_pcs():
+    """API endpoint to get PCs that are available for a specific lab and date"""
+    lab_id = request.args.get('lab_id')
+    reservation_date = request.args.get('date')
+    start_time = request.args.get('start_time')
+    end_time = request.args.get('end_time')
+    
+    if not all([lab_id, reservation_date]):
+        return jsonify({"error": "Missing required parameters"}), 400
+    
+    try:
+        conn = get_db_connection()
+        
+        # Check if lab exists
+        lab = conn.execute("SELECT * FROM laboratories WHERE lab_id = ?", (lab_id,)).fetchone()
+        if not lab:
+            conn.close()
+            return jsonify({"error": "Laboratory not found"}), 404
+        
+        # Check if reservation date is today
+        is_today = reservation_date == datetime.now().strftime('%Y-%m-%d')
+        
+        # Get all PCs for this lab
+        pc_status = []
+        
+        # Get PC status for today from lab_computers table if the date is today
+        if is_today:
+            lab_pcs = conn.execute("""
+                SELECT pc_number, status 
+                FROM lab_computers 
+                WHERE lab_id = ? 
+                ORDER BY pc_number
+            """, (lab_id,)).fetchall()
+            
+            # If no PCs found in the database, initialize them all as available
+            if not lab_pcs and lab['capacity'] > 0:
+                for i in range(1, lab['capacity'] + 1):
+                    pc_status.append({
+                        "pc_number": i,
+                        "status": "Available"
+                    })
+            else:
+                for pc in lab_pcs:
+                    pc_status.append({
+                        "pc_number": pc['pc_number'],
+                        "status": pc['status']
+                    })
+        else:
+            # For future dates, initialize all PCs as available
+            for i in range(1, lab['capacity'] + 1):
+                pc_status.append({
+                    "pc_number": i,
+                    "status": "Available"
+                })
+        
+        # Get reserved PCs for this timeslot regardless of date
+        reserved_pcs = []
+        if start_time and end_time:
+            booked_pcs = conn.execute("""
+                SELECT computer_number 
+                FROM lab_reservations
+                WHERE lab_id = ? 
+                AND reservation_date = ? 
+                AND status = 'Approved'
+                AND computer_number IS NOT NULL
+                AND (
+                    (start_time <= ? AND end_time > ?) OR
+                    (start_time < ? AND end_time >= ?) OR
+                    (start_time >= ? AND end_time <= ?)
+                )
+            """, (lab_id, reservation_date, start_time, start_time, end_time, end_time, start_time, end_time)).fetchall()
+            
+            reserved_pcs = [pc['computer_number'] for pc in booked_pcs]
+        
+        # Mark reserved PCs as unavailable
+        for pc in pc_status:
+            if pc['pc_number'] in reserved_pcs:
+                pc['status'] = 'Used'
+        
+        conn.close()
+        
+        # Return all PCs with their availability status
+        return jsonify({
+            "lab_id": lab_id,
+            "capacity": lab['capacity'],
+            "pc_status": pc_status,
+            "is_today": is_today
         })
         
     except sqlite3.Error as e:

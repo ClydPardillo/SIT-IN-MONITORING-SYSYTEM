@@ -778,7 +778,7 @@
 
   // Reset a student's sessions
   function resetStudentSession(studentId, studentName) {
-    if (confirm(`Are you sure you want to reset sessions for ${studentName}?`)) {
+    if (confirm(`Are you sure you want to reset sessions for ${studentName}? This will also clear all their reservations and reservation history.`)) {
       // Show loading indicator
       const resetButton = event.target.closest('button');
       const originalText = resetButton.innerHTML;
@@ -799,7 +799,7 @@
         resetButton.innerHTML = originalText;
         
         if (data.success) {
-          alert(`Sessions reset successfully for ${studentName}`);
+          alert(`Sessions reset and reservations cleared successfully for ${studentName}`);
           // Refresh the page to update the session counts
           window.location.reload();
         } else {
