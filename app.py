@@ -692,7 +692,7 @@ def reservation():
                     (lr.status = 'Approved' AND lr.reservation_date >= date('now')))
                 ORDER BY lr.reservation_date ASC, lr.start_time ASC
         """, (session['user'],)).fetchall()
-
+        
         # Get student info
         student = conn.execute("SELECT * FROM students WHERE idno = ?", (session['user'],)).fetchone()
         # Calculate remaining sessions (reuse dashboard logic)
@@ -779,7 +779,7 @@ def admin_dashboard():
                 WHERE student_id = ? AND behavior_points > 0
             """, (student['idno'],)).fetchone()['total_points']
             student_dict['behavior_points'] = behavior_points
-
+            
             # Calculate remaining sessions using new logic
             max_sessions = 30 if student['course'] in ("BSIT", "BSCS") else 15
             free_sessions_earned = behavior_points // 3

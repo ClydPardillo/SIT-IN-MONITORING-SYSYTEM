@@ -435,6 +435,49 @@
     const cancelRejectBtn = document.getElementById('cancelReject');
     const closeButtons = document.querySelectorAll('.close');
     
+    // Function to show a notification (matching the site's notification style)
+    function showNotification(message, type = 'success') {
+      // Create notification container if it doesn't exist
+      let container = document.querySelector('.notification-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.className = 'notification-container';
+        document.body.appendChild(container);
+      }
+      
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.className = `notification alert-${type}`;
+      
+      // Add appropriate icon
+      let iconClass = 'fa-check-circle';
+      if (type === 'danger' || type === 'error' || type === 'failed') {
+        iconClass = 'fa-exclamation-circle';
+      } else if (type === 'info') {
+        iconClass = 'fa-info-circle';
+      } else if (type === 'warning') {
+        iconClass = 'fa-exclamation-triangle';
+      }
+      
+      notification.innerHTML = `
+        <span class="icon">
+          <i class="fa ${iconClass}" aria-hidden="true"></i>
+        </span>
+        ${message}
+      `;
+      
+      // Add to container
+      container.appendChild(notification);
+      
+      // Auto remove after 5 seconds
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+          notification.remove();
+        }, 500);
+      }, 4500);
+    }
+    
     // Search and filter functionality
     const searchInput = document.getElementById('reservationSearch');
     const statusFilter = document.getElementById('statusFilter');
@@ -789,6 +832,9 @@
         return response.json();
       })
       .then(data => {
+        // Show success notification
+        showNotification('Reservation successfully approved', 'success');
+        
         // Get row data for log entry
         const cells = row.querySelectorAll('td');
         const studentId = cells[0].textContent.trim();
@@ -838,7 +884,7 @@
         
         if (error.response && error.response.json) {
           error.response.json().then(errData => {
-            alert(`Error: ${errData.error || 'Failed to approve reservation'}`);
+            showNotification(`Error: ${errData.error || 'Failed to approve reservation'}`, 'danger');
           });
         } else {
           // Check row status cell - if it already shows approved, don't show error
@@ -847,7 +893,7 @@
             return;
           }
           
-          alert('Error: Failed to approve reservation');
+          showNotification('Error: Failed to approve reservation', 'danger');
         }
         
         // Reset button states
@@ -881,6 +927,9 @@
         // Close the modal
         rejectModal.style.display = 'none';
         
+        // Show rejection notification
+        showNotification('Reservation rejected', 'danger');
+        
         // Get row data for log entry
         const cells = row.querySelectorAll('td');
         const studentId = cells[0].textContent.trim();
@@ -904,10 +953,10 @@
       .catch(error => {
         if (error.json) {
           error.json().then(errData => {
-            alert(`Error: ${errData.error || 'Failed to reject reservation'}`);
+            showNotification(`Error: ${errData.error || 'Failed to reject reservation'}`, 'danger');
           });
         } else {
-          alert('Error: Failed to reject reservation');
+          showNotification('Error: Failed to reject reservation', 'danger');
         }
         
         // Reset button states
